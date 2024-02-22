@@ -1,0 +1,38 @@
+{
+  "name": "curvefactoryeventlistnener",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "prestart": "node load_env.js",
+    "start": "node index.js",
+    "start_sqs": "node index.js",
+    "dev": "nodemon index.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@sentry/node": "^7.59.3",
+    "@aws-sdk/client-sqs": "^3.462.0",
+    "@moralisweb3/evm-utils": "^2.23.2",
+    "alchemy-sdk": "^3.1.0",
+    "aws-sdk": "^2.1494.0",
+    "axios": "^1.6.2",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "install": "^0.13.0",
+    "moralis": "^2.23.2",
+    "npm": "^10.2.5",
+    "onesignal-node": "^3.4.0",
+    "redis": "^4.6.11",
+    "web3": "^1.2.11"
+  },
+  "devDependencies": {
+    "dotenv-cli": "^4.0.0",
+    "nodemon": "^3.0.1"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}

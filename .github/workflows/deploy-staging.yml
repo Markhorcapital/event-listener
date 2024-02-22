@@ -1,0 +1,61 @@
+name: Deploy to Amazon EKS
+
+on:
+  push:
+    branches: [ "stage" ]
+
+env:
+  APP_NAME: event-manager               # set this to your App Name  (Its should be lowercase)
+  AWS_REGION: us-east-2                 # set this to your preferred AWS region, e.g. us-west-1
+  ECR_REPOSITORY: event-manager         # set this to your Amazon ECR repository name
+  NAMESPACE: stg                        # set this to the name of the k8s namespace
+  CLUSTER_NAME: groupabcd6              # set this to the name of the EKS cluster
+  IMAGE_TAG: ${{ github.sha }}          # set this to your image tag
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    environment: staging
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+
+    - name: Create env file
+      run: |
+        echo "${{ secrets.ENV_STG }}" > .env
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v1
+      with:
+        aws-access-key-id: ${{ secrets.AWS_CICD_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_CICD_SECRET_ACCESS_KEY }}
+        aws-region: ${{ secrets.AWS_REGION }}
+
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v1
+
+    - name: Build, tag, and push image to Amazon ECR
+      id: build-image
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+      run: |
+        # Build a docker container and
+        # push it to ECR so that it can
+        # be deployed to EKS.
+        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+        echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+    - name: Update Image Tag in deployment.yaml
+      run: |
+        find kubernetes/ -type f -exec sed -i -e "s/_APP_NAME/$APP_NAME/g" -e "s/_NAMESPACE/$NAMESPACE/g" -e "s/_IMAGE_TAG/$IMAGE_TAG/g" {} +
+
+    - name: Deploy to EKS
+      run: |
+        aws eks --region $AWS_REGION update-kubeconfig --name $CLUSTER_NAME
+        kubectl apply -f kubernetes/

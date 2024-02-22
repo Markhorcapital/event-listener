@@ -1,0 +1,26 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: _APP_NAME
+  namespace: _NAMESPACE # Make sure this is the namespace where your Nginx service is deployed
+  annotations:
+    #nginx.ingress.kubernetes.io/rewrite-target: /$1
+    # Add other necessary annotations depending on your ingress controller and requirements
+spec:
+  ingressClassName: "nginx"
+  rules:
+  - host: _NAMESPACE-_APP_NAME.wikistars.ai # Replace with your domain
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: _APP_NAME # Replace with the name of your service
+            port:
+              number: 80 # Replace with the port your Nginx service is running on
+  # Uncomment the following lines if you have TLS enabled
+  # tls:
+  # - hosts:
+  #   - mynginx.example.com
+  #   secretName: nginx-cert-secret # Kubernetes secret that contains the TLS certificate and key

@@ -1,0 +1,20 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: _APP_NAME
+  namespace: _NAMESPACE
+spec:
+  replicas: 1  # Adjust the number of replicas as needed
+  selector:
+    matchLabels:
+      app: _APP_NAME
+  template:
+    metadata:
+      labels:
+        app: _APP_NAME
+    spec:
+      containers:
+        - name: _APP_NAME
+          image: 138129797063.dkr.ecr.us-east-2.amazonaws.com/_APP_NAME:_IMAGE_TAG  # Replace with your Docker image
+          ports:
+            - containerPort: 3001  # Replace with your application's port

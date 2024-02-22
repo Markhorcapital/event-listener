@@ -1,0 +1,10 @@
+version: 0.0
+os: linux
+files:
+  - source: .
+    destination: /home/ubuntu/FriendTechEventListener
+hooks:
+  AfterInstall:
+   - location: setup.sh
+     timeout: 10000
+     runas: ubuntu
