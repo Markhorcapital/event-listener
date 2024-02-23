@@ -1,4 +1,4 @@
-## Server Configuration
+# Server Configuration
 PORT=3000
 
 # Sentry Configuration
