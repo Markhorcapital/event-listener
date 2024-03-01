@@ -6,9 +6,12 @@ const {
   SQS_QUEUE_URL,
   ASSET_LINKED_TOPIC,
   ASSET_UNLINKED_TOPIC,
+  STAKED_TOPIC,
+  WITHDRAWN_TOPIC,
   CHAIN_ID,
 } = process.env;
-const {abi} = require("../../abi/HiveRegistryV1.json");
+const { abi } = require("../../abi/HiveRegistryV1.json");
+const { abi: stakingAbi } = require("../../abi/StakingImplV2.json")
 const { web3 } = require("../../config/web3Instance");
 const { captureException } = require("@sentry/node");
 const sqs = new SQSClient({ region: AWS_REGION });
@@ -19,6 +22,8 @@ const eventABIMap = {
   [ASSET_UNLINKED_TOPIC]: abi.find(
     (e) => e.name === "AssetUnlinked"
   ),
+  [STAKED_TOPIC]: stakingAbi.find((e) => e.name === "Staked"),
+  [WITHDRAWN_TOPIC]: stakingAbi.find((e) => e.name === "Withdrawn")
 };
 
 async function sendEventToSQS(eventData) {
@@ -27,7 +32,7 @@ async function sendEventToSQS(eventData) {
     QueueUrl: SQS_QUEUE_URL,
   };
   await sqs.send(new SendMessageCommand(params));
-  console.log("data added to SQS",eventData);
+  console.log("data added to SQS", eventData);
 }
 
 
@@ -74,27 +79,50 @@ async function transformSubscriptionEvents(decodedEvent, event, eType) {
     events: {},
   };
 
-  // Ensure that all expected fields are present
-  const expectedFields = ['by', 'tokenAddress', 'tokenId', 'hiveId', 'category', 'timestamp'];
-  const hasAllFields = expectedFields.every(field => field in decodedEvent.decodedParameters);
 
-  if (!hasAllFields) {
-    console.error("Error: Missing fields in decoded parameters");
-    return null; // Or handle this case as needed
-  }
 
   switch (eType) {
     // Combining both cases as they share the same structure
     case "AssetLinked":
-    case "AssetUnlinked": 
-      jsonData.events[eType] = {
-        by: decodedEvent.decodedParameters.by,
-        tokenAddress: decodedEvent.decodedParameters.tokenAddress,
-        tokenId: parseInt(decodedEvent.decodedParameters.tokenId, 10), 
-        hiveId: parseInt(decodedEvent.decodedParameters.hiveId, 10), 
-        category: parseInt(decodedEvent.decodedParameters.category, 10), 
-        timestamp: decodedEvent.decodedParameters.timestamp,
-      };
+    case "AssetUnlinked":
+      {
+
+        // Ensure that all expected fields are present
+        const expectedFields = ['by', 'tokenAddress', 'tokenId', 'hiveId', 'category', 'timestamp'];
+        const hasAllFields = expectedFields.every(field => field in decodedEvent.decodedParameters);
+
+        if (!hasAllFields) {
+          console.error("Error: Missing fields in decoded parameters");
+          return null; // Or handle this case as needed
+        }
+        jsonData.events[eType] = {
+          by: decodedEvent.decodedParameters.by,
+          tokenAddress: decodedEvent.decodedParameters.tokenAddress,
+          tokenId: parseInt(decodedEvent.decodedParameters.tokenId, 10),
+          hiveId: parseInt(decodedEvent.decodedParameters.hiveId, 10),
+          category: parseInt(decodedEvent.decodedParameters.category, 10),
+          timestamp: decodedEvent.decodedParameters.timestamp,
+        };
+      }
+      break;
+    case "Staked":
+    case "Withdrawn":
+      {
+        // Ensure that all expected fields are present
+        const expectedFields = ['user', 'amount', 'time'];
+        const hasAllFields = expectedFields.every(field => field in decodedEvent.decodedParameters);
+
+        if (!hasAllFields) {
+          console.error("Error: Missing fields in decoded parameters");
+          return null; // Or handle this case as needed
+        }
+
+        jsonData.events[eType] = {
+          user: decodedEvent.decodedParameters.user,
+          amount: parseInt(decodedEvent.decodedParameters.amount, 10),
+          time: parseInt(decodedEvent.decodedParameters.time, 10),
+        };
+      }
       break;
     default:
       console.error(`Error: Unsupported event type ${eType}`);
