@@ -119,7 +119,7 @@ async function transformSubscriptionEvents(decodedEvent, event, eType) {
 
         jsonData.events[eType] = {
           user: decodedEvent.decodedParameters.user,
-          amount: parseInt(decodedEvent.decodedParameters.amount, 10),
+          amount: web3.utils.fromWei(decodedEvent.decodedParameters.amount),
           time: parseInt(decodedEvent.decodedParameters.time, 10),
         };
       }
