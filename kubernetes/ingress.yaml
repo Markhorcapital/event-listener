@@ -9,7 +9,7 @@ metadata:
 spec:
   ingressClassName: "nginx"
   rules:
-  - host: _NAMESPACE-_APP_NAME.wikistars.ai # Replace with your domain
+  - host: _NAMESPACE-_APP_NAME.propolis.ai # Replace with your domain
     http:
       paths:
       - path: /
