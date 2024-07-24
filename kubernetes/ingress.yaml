@@ -2,13 +2,21 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: _APP_NAME
-  namespace: _NAMESPACE # Make sure this is the namespace where your Nginx service is deployed
+  namespace: _NAMESPACE
   annotations:
-    #nginx.ingress.kubernetes.io/rewrite-target: /$1
-    # Add other necessary annotations depending on your ingress controller and requirements
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/group.name: aiprotocol
+    alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:us-east-2:138129797063:certificate/658e06c8-6e2e-40cc-958b-57b1dd8d8ac0
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS": 443}]'
+    alb.ingress.kubernetes.io/wafv2-acl-arn: arn:aws:wafv2:us-east-2:138129797063:regional/webacl/aiprotocol-eks-waf/d51f169a-8844-48d4-a32e-49d8c6e649a9
+    alb.ingress.kubernetes.io/wafv2-acl-scope: regional
+  labels:
+    app: _APP_NAME
 spec:
-  ingressClassName: "nginx"
+  ingressClassName: alb
   rules:
+<<<<<<< Updated upstream
   - host: _NAMESPACE-_APP_NAME.propolis.ai # Replace with your domain
     http:
       paths:
@@ -24,3 +32,15 @@ spec:
   # - hosts:
   #   - mynginx.example.com
   #   secretName: nginx-cert-secret # Kubernetes secret that contains the TLS certificate and key
+=======
+    - host: _NAMESPACE-_APP_NAME.propolis.ai
+      http:
+        paths:
+        - path: /
+          pathType: Prefix
+          backend:
+            service:
+              name: _APP_NAME
+              port:
+                number: 80
+>>>>>>> Stashed changes
