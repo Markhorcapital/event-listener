@@ -9,7 +9,7 @@ env:
   AWS_REGION: us-east-2                         # set this to your preferred AWS region, e.g. us-west-1
   ECR_REPOSITORY: hive-listener                    # set this to your Amazon ECR repository name
   NAMESPACE: prod                               # set this to the name of the k8s namespace
-  CLUSTER_NAME: propolis                      # set this to the name of the EKS cluster
+  CLUSTER_NAME: aiprotocol                      # set this to the name of the EKS cluster
   IMAGE_TAG: ${{ github.sha }}                  # set this to your image tag
 permissions:
   contents: read
@@ -33,7 +33,7 @@ jobs:
       with:
         aws-access-key-id: ${{ secrets.AWS_CICD_ACCESS_KEY_ID }}
         aws-secret-access-key: ${{ secrets.AWS_CICD_SECRET_ACCESS_KEY }}
-        aws-region: ${{ env.AWS_REGION }}
+        aws-region: ${{ secrets.AWS_DEFAULT_REGION }}
 
     - name: Login to Amazon ECR
       id: login-ecr
