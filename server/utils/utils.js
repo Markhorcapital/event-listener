@@ -4,35 +4,36 @@ const { SQSClient, SendMessageCommand } = require("@aws-sdk/client-sqs");
 const {
   AWS_REGION,
   SQS_QUEUE_URL,
-  ASSET_LINKED_TOPIC,
-  ASSET_UNLINKED_TOPIC,
-  STAKED_TOPIC,
-  WITHDRAWN_TOPIC,
+  NFT_STAKED_TOPIC,
+  NFT_UNSTAKED_TOPIC,
+  TOKEN_DEPOSITED_TOPIC,
+  TOKEN_WITHDRAWN_TOPIC,
   CHAIN_ID,
 } = process.env;
-const { abi } = require("../../abi/HiveRegistryV1.json");
-const { abi: stakingAbi } = require("../../abi/StakingImplV2.json")
+const { abi } = require("../../abi/NFTStakingV2.json");
+const { abi: stakingAbi } = require("../../abi/ERC1363StakingTrackerV1.json")
 const { web3 } = require("../../config/web3Instance");
 const { captureException } = require("@sentry/node");
 const sqs = new SQSClient({ region: AWS_REGION });
 
 // Create a mapping of event signatures to their ABI entries
 const eventABIMap = {
-  [ASSET_LINKED_TOPIC]: abi.find((e) => e.name === "AssetLinked"),
-  [ASSET_UNLINKED_TOPIC]: abi.find(
-    (e) => e.name === "AssetUnlinked"
+  [NFT_STAKED_TOPIC]: abi.find((e) => e.name === "Staked"),
+  [NFT_UNSTAKED_TOPIC]: abi.find(
+    (e) => e.name === "Unstaked"
   ),
-  [STAKED_TOPIC]: stakingAbi.find((e) => e.name === "Staked"),
-  [WITHDRAWN_TOPIC]: stakingAbi.find((e) => e.name === "Withdrawn")
+  [TOKEN_DEPOSITED_TOPIC]: stakingAbi.find((e) => e.name === "TokenDeposited"),
+  [TOKEN_WITHDRAWN_TOPIC]: stakingAbi.find((e) => e.name === "TokenWithdrawn")
 };
 
 async function sendEventToSQS(eventData) {
+  // console.log("eventData", JSON.stringify(eventData, null, 2));
   const params = {
     MessageBody: JSON.stringify(eventData),
     QueueUrl: SQS_QUEUE_URL,
   };
   await sqs.send(new SendMessageCommand(params));
-  console.log("data added to SQS", eventData);
+  console.log("data added to SQS", JSON.stringify(eventData, null, 2));
 }
 
 
@@ -79,51 +80,97 @@ async function transformSubscriptionEvents(decodedEvent, event, eType) {
     events: {},
   };
 
-
-
   switch (eType) {
-    // Combining both cases as they share the same structure
-    case "AssetLinked":
-    case "AssetUnlinked":
-      {
-
-        // Ensure that all expected fields are present
-        const expectedFields = ['by', 'tokenAddress', 'tokenId', 'hiveId', 'category', 'timestamp'];
-        const hasAllFields = expectedFields.every(field => field in decodedEvent.decodedParameters);
-
-        if (!hasAllFields) {
-          console.error("Error: Missing fields in decoded parameters");
-          return null; // Or handle this case as needed
-        }
-        jsonData.events[eType] = {
-          by: decodedEvent.decodedParameters.by,
-          tokenAddress: decodedEvent.decodedParameters.tokenAddress,
-          tokenId: parseInt(decodedEvent.decodedParameters.tokenId, 10),
-          hiveId: parseInt(decodedEvent.decodedParameters.hiveId, 10),
-          category: parseInt(decodedEvent.decodedParameters.category, 10),
-          timestamp: decodedEvent.decodedParameters.timestamp,
-        };
-      }
-      break;
+    // Handling Staked and Unstaked events
     case "Staked":
-    case "Withdrawn":
-      {
-        // Ensure that all expected fields are present
-        const expectedFields = ['user', 'amount', 'time'];
-        const hasAllFields = expectedFields.every(field => field in decodedEvent.decodedParameters);
+    case "Unstaked": {
+      // Ensure that all expected fields are present
+      const expectedFields = ['_by', '_tokenId', '_when'];
+      const hasAllFields = expectedFields.every(field => field in decodedEvent.decodedParameters);
 
-        if (!hasAllFields) {
-          console.error("Error: Missing fields in decoded parameters");
-          return null; // Or handle this case as needed
-        }
-
-        jsonData.events[eType] = {
-          user: decodedEvent.decodedParameters.user,
-          amount: web3.utils.fromWei(decodedEvent.decodedParameters.amount),
-          time: parseInt(decodedEvent.decodedParameters.time, 10),
-        };
+      if (!hasAllFields) {
+        console.error("Error: Missing fields in decoded parameters for Staked/Unstaked");
+        return null; // Or handle this case as needed
       }
+
+      // Store the event data for Staked and Unstaked
+      jsonData.events[eType] = {
+        by: decodedEvent.decodedParameters._by,               // Address of the user who staked/unstaked
+        tokenId: parseInt(decodedEvent.decodedParameters._tokenId, 10),  // Token ID involved
+        timestamp: decodedEvent.decodedParameters._when,      // Timestamp when the action occurred
+      };
       break;
+    }
+
+    // Handling TokenDeposited event
+    case "TokenDeposited": {
+      const expectedFields = ['depositToken', 'depositOwner', 'depositAmount', 'depositDuration', 'account'];
+      const hasAllFields = expectedFields.every(field => field in decodedEvent.decodedParameters);
+
+      if (!hasAllFields) {
+        console.error("Error: Missing fields in decoded parameters for TokenDeposited");
+        return null; // Handle this case as needed
+      }
+
+      // Store the event data for TokenDeposited
+      const account = decodedEvent.decodedParameters.account;
+
+      if (!account || !('amountLocked' in account && 'maturesOn' in account && 'lastUpdatedOn' in account && 'createdOn' in account)) {
+        console.error("Error: Missing fields in 'account' struct for TokenDeposited");
+        return null;
+      }
+
+      jsonData.events[eType] = {
+        depositToken: decodedEvent.decodedParameters.depositToken,        // Token address
+        depositOwner: decodedEvent.decodedParameters.depositOwner,        // Address of the deposit owner
+        depositAmount: decodedEvent.decodedParameters.depositAmount,      // Amount transferred
+        depositDuration: decodedEvent.decodedParameters.depositDuration,  // Duration in seconds
+        account: {
+          amountLocked: account.amountLocked,         // Amount locked in the contract (Wei)
+          maturesOn: account.maturesOn,               // Timestamp when tokens can be unlocked
+          lastUpdatedOn: account.lastUpdatedOn,       // Last update timestamp
+          createdOn: account.createdOn,               // Account creation timestamp
+        },
+      };
+      console.log("Transformed data:", JSON.stringify(jsonData, null, 2));  // Log the full data
+
+      break;
+    }
+
+    // Handling TokenWithdrawn event
+    case "TokenWithdrawn": {
+      const expectedFields = ['depositToken', 'depositOwner', 'to', 'account'];
+      const hasAllFields = expectedFields.every(field => field in decodedEvent.decodedParameters);
+
+      if (!hasAllFields) {
+        console.error("Error: Missing fields in decoded parameters for TokenWithdrawn");
+        return null; // Handle this case as needed
+      }
+
+      // Store the event data for TokenWithdrawn
+      const account = decodedEvent.decodedParameters.account;
+
+      if (!account || !('amountLocked' in account && 'maturesOn' in account && 'lastUpdatedOn' in account && 'createdOn' in account)) {
+        console.error("Error: Missing fields in 'account' struct for TokenWithdrawn");
+        return null;
+      }
+
+      jsonData.events[eType] = {
+        depositToken: decodedEvent.decodedParameters.depositToken,        // Token address
+        depositOwner: decodedEvent.decodedParameters.depositOwner,        // Address of the deposit owner
+        to: decodedEvent.decodedParameters.to,                            // Address the tokens were sent to
+        account: {
+          amountLocked: account.amountLocked,         // Amount locked in the contract (Wei)
+          maturesOn: account.maturesOn,               // Timestamp when tokens can be unlocked
+          lastUpdatedOn: account.lastUpdatedOn,       // Last update timestamp
+          createdOn: account.createdOn,               // Account creation timestamp
+        },
+      };
+      console.log("Transformed data:", JSON.stringify(jsonData, null, 2));  // Log the full data
+
+      break;
+    }
+
     default:
       console.error(`Error: Unsupported event type ${eType}`);
       return null; // Or handle this case as needed
