@@ -3,8 +3,8 @@ require("dotenv").config();
 const { captureException } = require("@sentry/node");
 const { web3 } = require("../config/web3Instance");
 
-const { HIVE_CONTRACT_ADDRESS, ASSET_LINKED_TOPIC, ASSET_UNLINKED_TOPIC,
-  ALI_STAKING_ADDRESS, STAKED_TOPIC, WITHDRAWN_TOPIC } =
+const { NFT_STAKING_ADDRESS, NFT_STAKED_TOPIC, NFT_UNSTAKED_TOPIC,
+  ALI_STAKING_ADDRESS, TOKEN_DEPOSITED_TOPIC, TOKEN_WITHDRAWN_TOPIC } =
   process.env;
 const {
   sendEventToSQS,
@@ -23,74 +23,72 @@ const processEvent = async (event) => {
   }
 };
 
-async function subscribeToAssetLinkEvents() {
-  var subscription = web3.eth
-    .subscribe(
-      "logs",
-      {
-        address: HIVE_CONTRACT_ADDRESS,
-        topics: [ASSET_LINKED_TOPIC],
-      },
-      function (error) {
-        if (error) {
-          console.log(error);
-        }
-      }
-    )
-    .on("data", async function (log) {
-      const decodedLog = await decodeLog(log);
-      if (decodedLog && !decodedLog.error) {
-        const eventData = await transformSubscriptionEvents(
-          decodedLog,
-          log,
-          decodedLog.eventName
-        );
-        console.log(
-          "Transformed data:",
-          eventData
-        );
+// async function subscribeToAssetLinkEvents() {
+//   var subscription = web3.eth
+//     .subscribe(
+//       "logs",
+//       {
+//         address: NFT_STAKING_ADDRESS,
+//         topics: [NFT_STAKED_TOPIC],
+//       },
+//       function (error) {
+//         if (error) {
+//           console.log(error);
+//         }
+//       }
+//     )
+//     .on("data", async function (log) {
+//       const decodedLog = await decodeLog(log);
+//       if (decodedLog && !decodedLog.error) {
+//         const eventData = await transformSubscriptionEvents(
+//           decodedLog,
+//           log,
+//           decodedLog.eventName
+//         );
+//         console.log(
+//           "Transformed data:",
+//           eventData
+//         );
 
-        await processEvent(eventData);
+//         await processEvent(eventData);
 
-      }
-    })
-    .on("error", console.error);
-}
+//       }
+//     })
+//     .on("error", console.error);
+// }
 
-async function subscribeToAssetUnLinkEvents() {
-  var subscription = web3.eth
-    .subscribe(
-      "logs",
-      {
-        address: HIVE_CONTRACT_ADDRESS,
-        topics: [ASSET_UNLINKED_TOPIC],
-      },
-      function (error) {
-        if (error) {
-          console.log(error);
-        }
-      }
-    )
-    .on("data", async function (log) {
-      const decodedLog = await decodeLog(log);
-      if (decodedLog && !decodedLog.error) {
-        const eventData = await transformSubscriptionEvents(
-          decodedLog,
-          log,
-          decodedLog.eventName
-        );
-        console.log(
-          "Transformed data:",
-          eventData
-        );
+// async function subscribeToAssetUnLinkEvents() {
+//   var subscription = web3.eth
+//     .subscribe(
+//       "logs",
+//       {
+//         address: NFT_STAKING_ADDRESS,
+//         topics: [NFT_UNSTAKED_TOPIC],
+//       },
+//       function (error) {
+//         if (error) {
+//           console.log(error);
+//         }
+//       }
+//     )
+//     .on("data", async function (log) {
+//       const decodedLog = await decodeLog(log);
+//       if (decodedLog && !decodedLog.error) {
+//         const eventData = await transformSubscriptionEvents(
+//           decodedLog,
+//           log,
+//           decodedLog.eventName
+//         );
+//         console.log(
+//           "Transformed data:",
+//           eventData
+//         );
 
-        await processEvent(eventData);
-      }
-    })
-    .on("error", console.error);
-}
-
-
+//         await processEvent(eventData);
+//       }
+//     })
+//     .on("error", console.error);
+// }
 
 async function subscribeToAliStakeEvents() {
   var subscription = web3.eth
@@ -98,7 +96,7 @@ async function subscribeToAliStakeEvents() {
       "logs",
       {
         address: ALI_STAKING_ADDRESS,
-        topics: [STAKED_TOPIC],
+        topics: [TOKEN_DEPOSITED_TOPIC],
       },
       function (error) {
         if (error) {
@@ -114,10 +112,10 @@ async function subscribeToAliStakeEvents() {
           log,
           decodedLog.eventName
         );
-        console.log(
-          "Transformed data:",
-          eventData
-        );
+        // console.log(
+        //   "Transformed data:",
+        //   eventData
+        // );
 
         await processEvent(eventData);
 
@@ -132,7 +130,7 @@ async function subscribeToAliWithdrawnEvents() {
       "logs",
       {
         address: ALI_STAKING_ADDRESS,
-        topics: [WITHDRAWN_TOPIC],
+        topics: [TOKEN_WITHDRAWN_TOPIC],
       },
       function (error) {
         if (error) {
@@ -148,10 +146,10 @@ async function subscribeToAliWithdrawnEvents() {
           log,
           decodedLog.eventName
         );
-        console.log(
-          "Transformed data:",
-          eventData
-        );
+        // console.log(
+        //   "Transformed data:",
+        //   eventData
+        // );
 
         await processEvent(eventData);
 

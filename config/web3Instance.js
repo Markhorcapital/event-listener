@@ -2,14 +2,14 @@
 const { captureException } = require("@sentry/node");
 const Web3 = require("web3");
 require("dotenv").config();
-const HIVE_CONTRACT_ADDRESS = process.env.HIVE_CONTRACT_ADDRESS;
+const NFT_STAKING_ADDRESS = process.env.NFT_STAKING_ADDRESS;
 
 const WEB3_PROVIDER = process.env.WEB3_PROVIDER;
 
 let web3;
 let contract;
 
-const { abi } = require("../abi/HiveRegistryV1.json");
+const { abi } = require("../abi/NFTStakingV2.json");
 
 // Function to create a new web3 instance and contract
 async function createWeb3Instance(retryCount = 0) {
@@ -35,7 +35,7 @@ async function createWeb3Instance(retryCount = 0) {
 
   web3 = new Web3(provider);
 
-  contract = new web3.eth.Contract(abi, HIVE_CONTRACT_ADDRESS);
+  contract = new web3.eth.Contract(abi, NFT_STAKING_ADDRESS);
 }
 
 
