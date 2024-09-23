@@ -160,8 +160,8 @@ async function subscribeToAliWithdrawnEvents() {
 
 const startProcessing = async () => {
   try {
-    await subscribeToAssetLinkEvents();
-    await subscribeToAssetUnLinkEvents();
+    // await subscribeToAssetLinkEvents();
+    // await subscribeToAssetUnLinkEvents();
     await subscribeToAliStakeEvents();
     await subscribeToAliWithdrawnEvents();
   } catch (error) {
