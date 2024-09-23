@@ -23,72 +23,72 @@ const processEvent = async (event) => {
   }
 };
 
-// async function subscribeToAssetLinkEvents() {
-//   var subscription = web3.eth
-//     .subscribe(
-//       "logs",
-//       {
-//         address: NFT_STAKING_ADDRESS,
-//         topics: [NFT_STAKED_TOPIC],
-//       },
-//       function (error) {
-//         if (error) {
-//           console.log(error);
-//         }
-//       }
-//     )
-//     .on("data", async function (log) {
-//       const decodedLog = await decodeLog(log);
-//       if (decodedLog && !decodedLog.error) {
-//         const eventData = await transformSubscriptionEvents(
-//           decodedLog,
-//           log,
-//           decodedLog.eventName
-//         );
-//         console.log(
-//           "Transformed data:",
-//           eventData
-//         );
+async function subscribeToAssetLinkEvents() {
+  var subscription = web3.eth
+    .subscribe(
+      "logs",
+      {
+        address: NFT_STAKING_ADDRESS,
+        topics: [NFT_STAKED_TOPIC],
+      },
+      function (error) {
+        if (error) {
+          console.log(error);
+        }
+      }
+    )
+    .on("data", async function (log) {
+      const decodedLog = await decodeLog(log);
+      if (decodedLog && !decodedLog.error) {
+        const eventData = await transformSubscriptionEvents(
+          decodedLog,
+          log,
+          decodedLog.eventName
+        );
+        console.log(
+          "Transformed data:",
+          eventData
+        );
 
-//         await processEvent(eventData);
+        await processEvent(eventData);
 
-//       }
-//     })
-//     .on("error", console.error);
-// }
+      }
+    })
+    .on("error", console.error);
+}
 
-// async function subscribeToAssetUnLinkEvents() {
-//   var subscription = web3.eth
-//     .subscribe(
-//       "logs",
-//       {
-//         address: NFT_STAKING_ADDRESS,
-//         topics: [NFT_UNSTAKED_TOPIC],
-//       },
-//       function (error) {
-//         if (error) {
-//           console.log(error);
-//         }
-//       }
-//     )
-//     .on("data", async function (log) {
-//       const decodedLog = await decodeLog(log);
-//       if (decodedLog && !decodedLog.error) {
-//         const eventData = await transformSubscriptionEvents(
-//           decodedLog,
-//           log,
-//           decodedLog.eventName
-//         );
-//         console.log(
-//           "Transformed data:",
-//           eventData
-//         );
+async function subscribeToAssetUnLinkEvents() {
+  var subscription = web3.eth
+    .subscribe(
+      "logs",
+      {
+        address: NFT_STAKING_ADDRESS,
+        topics: [NFT_UNSTAKED_TOPIC],
+      },
+      function (error) {
+        if (error) {
+          console.log(error);
+        }
+      }
+    )
+    .on("data", async function (log) {
+      const decodedLog = await decodeLog(log);
+      if (decodedLog && !decodedLog.error) {
+        const eventData = await transformSubscriptionEvents(
+          decodedLog,
+          log,
+          decodedLog.eventName
+        );
+        console.log(
+          "Transformed data:",
+          eventData
+        );
 
-//         await processEvent(eventData);
-//       }
-//     })
-//     .on("error", console.error);
-// }
+        await processEvent(eventData);
+      }
+    })
+    .on("error", console.error);
+}
 
 async function subscribeToAliStakeEvents() {
   var subscription = web3.eth
@@ -160,9 +160,9 @@ async function subscribeToAliWithdrawnEvents() {
 
 const startProcessing = async () => {
   try {
-    // await subscribeToAssetLinkEvents();
-    // await subscribeToAssetUnLinkEvents();
-    //
+    await subscribeToAssetLinkEvents();
+    await subscribeToAssetUnLinkEvents();
+
     await subscribeToAliStakeEvents();
     await subscribeToAliWithdrawnEvents();
   } catch (error) {
