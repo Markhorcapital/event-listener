@@ -62,7 +62,7 @@ AWS_SECRET_NAME=
 AWS_DEFAULT_REGION="us-east-2"
 WEB3_PROVIDER=wss://eth-sepolia.g.alchemy.com/v2/<your-api-key>
 
-SQS_QUEUE_URL=https://sqs.us-east-2.amazonaws.com/<your-queue-id>
+HIVE_EVENT_HANDLER_SQS=https://sqs.us-east-2.amazonaws.com/<your-queue-id>
 
 NFT_STAKING_ADDRESS=0xE856B97c2015293814b4bb5a970b3eE507C118cB
 PORT=3001

@@ -4,7 +4,9 @@ const { captureException } = require("@sentry/node");
 const { web3 } = require("../config/web3Instance");
 
 const { NFT_STAKING_ADDRESS, NFT_STAKED_TOPIC, NFT_UNSTAKED_TOPIC,
-  ALI_STAKING_ADDRESS, TOKEN_DEPOSITED_TOPIC, TOKEN_WITHDRAWN_TOPIC } =
+  ALI_STAKING_ADDRESS, TOKEN_DEPOSITED_TOPIC, TOKEN_WITHDRAWN_TOPIC,
+  REWARD_SYSTEM_CONTRACT, ROOT_CHANGED_TOPIC, ERC20_REWARD_CLAIMED
+} =
   process.env;
 const {
   sendEventToSQS,
@@ -45,11 +47,6 @@ async function subscribeToAssetLinkEvents() {
           log,
           decodedLog.eventName
         );
-        console.log(
-          "Transformed data:",
-          eventData
-        );
-
         await processEvent(eventData);
 
       }
@@ -78,10 +75,6 @@ async function subscribeToAssetUnLinkEvents() {
           decodedLog,
           log,
           decodedLog.eventName
-        );
-        console.log(
-          "Transformed data:",
-          eventData
         );
 
         await processEvent(eventData);
@@ -112,13 +105,7 @@ async function subscribeToAliStakeEvents() {
           log,
           decodedLog.eventName
         );
-        // console.log(
-        //   "Transformed data:",
-        //   eventData
-        // );
-
         await processEvent(eventData);
-
       }
     })
     .on("error", console.error);
@@ -146,17 +133,73 @@ async function subscribeToAliWithdrawnEvents() {
           log,
           decodedLog.eventName
         );
-        // console.log(
-        //   "Transformed data:",
-        //   eventData
-        // );
-
         await processEvent(eventData);
 
       }
     })
     .on("error", console.error);
 }
+/// reward system
+async function subscribeToRootChangedEvents() {
+  var subscription = web3.eth
+    .subscribe(
+      "logs",
+      {
+        address: REWARD_SYSTEM_CONTRACT,
+        topics: [ROOT_CHANGED_TOPIC],
+      },
+      function (error) {
+        if (error) {
+          console.log(error);
+        }
+      }
+    )
+    .on("data", async function (log) {
+      const decodedLog = await decodeLog(log);
+      if (decodedLog && !decodedLog.error) {
+        const eventData = await transformSubscriptionEvents(
+          decodedLog,
+          log,
+          decodedLog.eventName
+        );
+        await processEvent(eventData);
+
+      }
+    })
+    .on("error", console.error);
+}
+
+async function subscribeToERC20RewardClaimedEvents() {
+  var subscription = web3.eth
+    .subscribe(
+      "logs",
+      {
+        address: REWARD_SYSTEM_CONTRACT,
+        topics: [ERC20_REWARD_CLAIMED],
+      },
+      function (error) {
+        if (error) {
+          console.log(error);
+        }
+      }
+    )
+    .on("data", async function (log) {
+      console.log("log", log);
+      const decodedLog = await decodeLog(log);
+      if (decodedLog && !decodedLog.error) {
+        const eventData = await transformSubscriptionEvents(
+          decodedLog,
+          log,
+          decodedLog.eventName
+        );
+        await processEvent(eventData);
+
+      }
+    })
+    .on("error", console.error);
+}
+
+
 
 const startProcessing = async () => {
   try {
@@ -165,6 +208,9 @@ const startProcessing = async () => {
 
     await subscribeToAliStakeEvents();
     await subscribeToAliWithdrawnEvents();
+
+    await subscribeToRootChangedEvents();
+    await subscribeToERC20RewardClaimedEvents();
   } catch (error) {
     console.error("Fatal error in startProcessing:", error);
     captureException(error);
