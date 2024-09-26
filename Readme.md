@@ -2,12 +2,11 @@
 
 ## Project Overview
 
-This project contains two event listeners for the **ALI Staking** and **NFT Staking (Pods)** contracts.
+This project contains three event listeners for the **ALI Staking** and **NFT Staking (Pods)** and **Reward System** contracts.
 
 ### Current Status:
 
 - The event listener is only actively running for **ALI Staking**.
-- A pull request (PR) has been shared for **NFT Staking**, introducing the `NFTStakingV2` contract, which incorporates a locking mechanism.
 
   - **Note:** In production, we will continue using the old **NFT Staking** smart contract, where Pods are staked.
   - **PersonalityStaking Mainnet (ALI Staking):** `0xAbEffb353dae4A177057e9a3e4A663386cF54758`
@@ -21,6 +20,7 @@ This project contains two event listeners for the **ALI Staking** and **NFT Stak
 - **NFT Staking Contract (V2):** `0xE856B97c2015293814b4bb5a970b3eE507C118cB`
 - **ERC20 Staking (ALI Staking):** `0x4b3717169BE7319B0B35a36905C6671262130aa9`
 - **ALI Token (Sepolia):** `0x2722727d9DeB5962f7166E03aE81b1169f784A11`
+- **REWARD_SYSTEM_CONTRACT:** `0xA6EC8541979FC97aA9bEd11798fc562cCA577E87`
 
 ## Getting Started
 
@@ -77,6 +77,11 @@ ALI_STAKING_ADDRESS=0x4b3717169BE7319B0B35a36905C6671262130aa9
 SENTRY_DSN=https://<your-sentry-dsn>@o1027208.ingest.sentry.io/<project-id>
 TOKEN_DEPOSITED_TOPIC=0xf223d9f62a25e1cc7de0f82802962e811a982b702699cc85222bf17c0422163b
 TOKEN_WITHDRAWN_TOPIC=0x43f48baced8c8f1d748cc1ac8ed7ed56105c833eec2b7ddef9aec537d9593d12
+
+#Reward System
+REWARD_SYSTEM_CONTRACT=0xA6EC8541979FC97aA9bEd11798fc562cCA577E87
+ROOT_CHANGED_TOPIC=0x714dceb37ab5c7fb26ab805d3dc0423f5d90c3dac9f6702a2ea1402ea847851c
+ERC20_REWARD_CLAIMED=0x617dc33bfe6c05895429aa10442ff5716e0040e90d0c04faa92ced6a4d0ae787
 ```
 
 ## Event Structure
@@ -165,6 +170,41 @@ TOKEN_WITHDRAWN_TOPIC=0x43f48baced8c8f1d748cc1ac8ed7ed56105c833eec2b7ddef9aec537
       "by": "0x707562da7C5e689F23139f4ACc354D163a18985a",
       "tokenId": 11,
       "timestamp": "1727115252"
+    }
+  }
+}
+```
+
+### Reward System RootChanged Event
+
+```json
+{
+  "eventType": "RootChanged",
+  "contractAddress": "0xA6EC8541979FC97aA9bEd11798fc562cCA577E87",
+  "chainId": 1,
+  "transactionHash": "0x65854b111eab17273e7e42c1c6ede7a915641a896e36b96ef91e305d03b642c2",
+  "events": {
+    "RootChanged": {
+      "by": "0x27658b44BBbD1a640354F0845b09e709eCE428CC",
+      "root": "0xc38cce658171a4f5c7722b377dbdcafc6662ad1c3d253851d7cc502e3a488978"
+    }
+  }
+}
+```
+
+### ERC20RewardClaimed Event
+
+```json
+{
+  "eventType": "ERC20RewardClaimed",
+  "contractAddress": "0xA6EC8541979FC97aA9bEd11798fc562cCA577E87",
+  "chainId": 1,
+  "transactionHash": "0xdbc6ac3f29289097f0619c3b35d9a056cccbeb0b12ee283f8b2c76b77ce7a7e8",
+  "events": {
+    "ERC20RewardClaimed": {
+      "rewardToken": "0x2722727d9DeB5962f7166E03aE81b1169f784A11",
+      "user": "0xf8E00719181774261Fb58Fb1e21c7F3317035045",
+      "amount": "3000000000000000000"
     }
   }
 }
