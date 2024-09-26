@@ -3,17 +3,21 @@
 const { SQSClient, SendMessageCommand } = require("@aws-sdk/client-sqs");
 const {
   AWS_REGION,
-  SQS_QUEUE_URL,
+  HIVE_EVENT_HANDLER_SQS,
   NFT_STAKED_TOPIC,
   NFT_UNSTAKED_TOPIC,
   TOKEN_DEPOSITED_TOPIC,
   TOKEN_WITHDRAWN_TOPIC,
+  ROOT_CHANGED_TOPIC,
+  ERC20_REWARD_CLAIMED,
   CHAIN_ID,
 } = process.env;
 const { abi } = require("../../abi/NFTStakingV2.json");
 const { abi: stakingAbi } = require("../../abi/ERC1363StakingTrackerV1.json")
+const { abi: reward_system_abi } = require("../../abi/RewardSystem.json");
 const { web3 } = require("../../config/web3Instance");
 const { captureException } = require("@sentry/node");
+const e = require("express");
 const sqs = new SQSClient({ region: AWS_REGION });
 
 // Create a mapping of event signatures to their ABI entries
@@ -23,17 +27,19 @@ const eventABIMap = {
     (e) => e.name === "Unstaked"
   ),
   [TOKEN_DEPOSITED_TOPIC]: stakingAbi.find((e) => e.name === "TokenDeposited"),
-  [TOKEN_WITHDRAWN_TOPIC]: stakingAbi.find((e) => e.name === "TokenWithdrawn")
+  [TOKEN_WITHDRAWN_TOPIC]: stakingAbi.find((e) => e.name === "TokenWithdrawn"),
+  [ROOT_CHANGED_TOPIC]: reward_system_abi.find((e) => e.name === "RootChanged"),
+  [ERC20_REWARD_CLAIMED]: reward_system_abi.find((e) => e.name === "ERC20RewardClaimed")
 };
 
 async function sendEventToSQS(eventData) {
   // console.log("eventData", JSON.stringify(eventData, null, 2));
   const params = {
     MessageBody: JSON.stringify(eventData),
-    QueueUrl: SQS_QUEUE_URL,
+    QueueUrl: HIVE_EVENT_HANDLER_SQS,
   };
   await sqs.send(new SendMessageCommand(params));
-  console.log("data added to SQS", JSON.stringify(eventData, null, 2));
+  console.log("data added to HIVE_EVENT_HANDLER_SQS", JSON.stringify(eventData, null, 2));
 }
 
 
@@ -168,6 +174,42 @@ async function transformSubscriptionEvents(decodedEvent, event, eType) {
       };
       console.log("Transformed data:", JSON.stringify(jsonData, null, 2));  // Log the full data
 
+      break;
+    }
+    // Handling RootChanged event
+    case "RootChanged": {
+      const expectedFields = ['by', 'root'];
+      const hasAllFields = expectedFields.every(field => field in decodedEvent.decodedParameters);
+
+      if (!hasAllFields) {
+        console.error("Error: Missing fields in decoded parameters for RootChanged");
+        return null;
+      }
+
+      jsonData.events[eType] = {
+        by: decodedEvent.decodedParameters.by,   // Address of the user who changed the root
+        root: decodedEvent.decodedParameters.root,  // New Merkle root (bytes32)
+      };
+      console.log("Transformed data for RootChanged:", JSON.stringify(jsonData, null, 2));
+      break;
+    }
+
+    // Handling ERC20RewardClaimed event
+    case "ERC20RewardClaimed": {
+      const expectedFields = ['rewardToken', 'user', 'amount'];
+      const hasAllFields = expectedFields.every(field => field in decodedEvent.decodedParameters);
+
+      if (!hasAllFields) {
+        console.error("Error: Missing fields in decoded parameters for ERC20RewardClaimed");
+        return null;
+      }
+
+      jsonData.events[eType] = {
+        rewardToken: decodedEvent.decodedParameters.rewardToken,   // Address of the reward token contract
+        user: decodedEvent.decodedParameters.user,                 // Address of the user claiming the reward
+        amount: decodedEvent.decodedParameters.amount.toString(),  // Claimed reward amount in wei (converted to string)
+      };
+      console.log("Transformed data for ERC20RewardClaimed:", JSON.stringify(jsonData, null, 2));
       break;
     }
 

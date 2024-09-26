@@ -3,13 +3,16 @@ const { captureException } = require("@sentry/node");
 const Web3 = require("web3");
 require("dotenv").config();
 const NFT_STAKING_ADDRESS = process.env.NFT_STAKING_ADDRESS;
-
+const REWARD_SYSTEM_CONTRACT = process.env.REWARD_SYSTEM_CONTRACT;
 const WEB3_PROVIDER = process.env.WEB3_PROVIDER;
 
 let web3;
-let contract;
+let nft_staking_contract;
+let reward_system_contract;
+
 
 const { abi } = require("../abi/NFTStakingV2.json");
+const { abi: reward_system_abi } = require('../abi/RewardSystem.json')
 
 // Function to create a new web3 instance and contract
 async function createWeb3Instance(retryCount = 0) {
@@ -35,7 +38,9 @@ async function createWeb3Instance(retryCount = 0) {
 
   web3 = new Web3(provider);
 
-  contract = new web3.eth.Contract(abi, NFT_STAKING_ADDRESS);
+  nft_staking_contract = new web3.eth.Contract(abi, NFT_STAKING_ADDRESS);
+  reward_system_contract = new web3.eth.Contract(reward_system_abi, REWARD_SYSTEM_CONTRACT);
+
 }
 
 
@@ -67,15 +72,18 @@ async function getLatestBlockNumber() {
   }
 }
 
-// Initial creation of the web3 instance and contract
+// Initial creation of the web3 instance and nft_staking_contract
 createWeb3Instance();
 
 module.exports = {
   get web3() {
     return web3;
   },
-  get contract() {
-    return contract;
+  get nft_staking_contract() {
+    return nft_staking_contract;
+  },
+  get nft_staking_contract() {
+    return reward_system_contract;
   },
   getChainId,
   getLatestBlockNumber,
