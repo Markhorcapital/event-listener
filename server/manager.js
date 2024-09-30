@@ -184,7 +184,6 @@ async function subscribeToERC20RewardClaimedEvents() {
       }
     )
     .on("data", async function (log) {
-      console.log("log", log);
       const decodedLog = await decodeLog(log);
       if (decodedLog && !decodedLog.error) {
         const eventData = await transformSubscriptionEvents(
