@@ -90,126 +90,50 @@ async function transformSubscriptionEvents(decodedEvent, event, eType) {
     // Handling Staked and Unstaked events
     case "Staked":
     case "Unstaked": {
-      // Ensure that all expected fields are present
-      const expectedFields = ['_by', '_tokenId', '_when'];
-      const hasAllFields = expectedFields.every(field => field in decodedEvent.decodedParameters);
-
-      if (!hasAllFields) {
-        console.error("Error: Missing fields in decoded parameters for Staked/Unstaked");
-        return null; // Or handle this case as needed
-      }
-
-      // Store the event data for Staked and Unstaked
-      jsonData.events[eType] = {
-        by: decodedEvent.decodedParameters._by,               // Address of the user who staked/unstaked
-        tokenId: parseInt(decodedEvent.decodedParameters._tokenId, 10),  // Token ID involved
-        timestamp: decodedEvent.decodedParameters._when,      // Timestamp when the action occurred
-      };
+      jsonData = await stakingEventsHandler(
+        decodedEvent,
+        eType,
+        jsonData
+      );
       break;
     }
 
     // Handling TokenDeposited event
     case "TokenDeposited": {
-      const expectedFields = ['depositToken', 'depositOwner', 'depositAmount', 'depositDuration', 'account'];
-      const hasAllFields = expectedFields.every(field => field in decodedEvent.decodedParameters);
-
-      if (!hasAllFields) {
-        console.error("Error: Missing fields in decoded parameters for TokenDeposited");
-        return null; // Handle this case as needed
-      }
-
-      // Store the event data for TokenDeposited
-      const account = decodedEvent.decodedParameters.account;
-
-      if (!account || !('amountLocked' in account && 'maturesOn' in account && 'lastUpdatedOn' in account && 'createdOn' in account)) {
-        console.error("Error: Missing fields in 'account' struct for TokenDeposited");
-        return null;
-      }
-
-      jsonData.events[eType] = {
-        depositToken: decodedEvent.decodedParameters.depositToken,        // Token address
-        depositOwner: decodedEvent.decodedParameters.depositOwner,        // Address of the deposit owner
-        depositAmount: decodedEvent.decodedParameters.depositAmount,      // Amount transferred
-        depositDuration: decodedEvent.decodedParameters.depositDuration,  // Duration in seconds
-        account: {
-          amountLocked: account.amountLocked,         // Amount locked in the contract (Wei)
-          maturesOn: account.maturesOn,               // Timestamp when tokens can be unlocked
-          lastUpdatedOn: account.lastUpdatedOn,       // Last update timestamp
-          createdOn: account.createdOn,               // Account creation timestamp
-        },
-      };
-      console.log("Transformed data:", JSON.stringify(jsonData, null, 2));  // Log the full data
-
+      jsonData = await tokenDepositedEventHandler(
+				decodedEvent,
+				eType,
+				jsonData
+			);
       break;
     }
 
     // Handling TokenWithdrawn event
     case "TokenWithdrawn": {
-      const expectedFields = ['depositToken', 'depositOwner', 'to', 'account'];
-      const hasAllFields = expectedFields.every(field => field in decodedEvent.decodedParameters);
-
-      if (!hasAllFields) {
-        console.error("Error: Missing fields in decoded parameters for TokenWithdrawn");
-        return null; // Handle this case as needed
-      }
-
-      // Store the event data for TokenWithdrawn
-      const account = decodedEvent.decodedParameters.account;
-
-      if (!account || !('amountLocked' in account && 'maturesOn' in account && 'lastUpdatedOn' in account && 'createdOn' in account)) {
-        console.error("Error: Missing fields in 'account' struct for TokenWithdrawn");
-        return null;
-      }
-
-      jsonData.events[eType] = {
-        depositToken: decodedEvent.decodedParameters.depositToken,        // Token address
-        depositOwner: decodedEvent.decodedParameters.depositOwner,        // Address of the deposit owner
-        to: decodedEvent.decodedParameters.to,                            // Address the tokens were sent to
-        account: {
-          amountLocked: account.amountLocked,         // Amount locked in the contract (Wei)
-          maturesOn: account.maturesOn,               // Timestamp when tokens can be unlocked
-          lastUpdatedOn: account.lastUpdatedOn,       // Last update timestamp
-          createdOn: account.createdOn,               // Account creation timestamp
-        },
-      };
-      console.log("Transformed data:", JSON.stringify(jsonData, null, 2));  // Log the full data
-
+      jsonData = await tokenWithdrawnEventHandler(
+				decodedEvent,
+				eType,
+				jsonData
+			);
       break;
     }
     // Handling RootChanged event
     case "RootChanged": {
-      const expectedFields = ['by', 'root'];
-      const hasAllFields = expectedFields.every(field => field in decodedEvent.decodedParameters);
-
-      if (!hasAllFields) {
-        console.error("Error: Missing fields in decoded parameters for RootChanged");
-        return null;
-      }
-
-      jsonData.events[eType] = {
-        by: decodedEvent.decodedParameters.by,   // Address of the user who changed the root
-        root: decodedEvent.decodedParameters.root,  // New Merkle root (bytes32)
-      };
-      console.log("Transformed data for RootChanged:", JSON.stringify(jsonData, null, 2));
+      jsonData = await rootChangedEventHandler(
+				decodedEvent,
+				eType,
+				jsonData
+			);
       break;
     }
 
     // Handling ERC20RewardClaimed event
     case "ERC20RewardClaimed": {
-      const expectedFields = ['rewardToken', 'user', 'amount'];
-      const hasAllFields = expectedFields.every(field => field in decodedEvent.decodedParameters);
-
-      if (!hasAllFields) {
-        console.error("Error: Missing fields in decoded parameters for ERC20RewardClaimed");
-        return null;
-      }
-
-      jsonData.events[eType] = {
-        rewardToken: decodedEvent.decodedParameters.rewardToken,   // Address of the reward token contract
-        user: decodedEvent.decodedParameters.user,                 // Address of the user claiming the reward
-        amount: decodedEvent.decodedParameters.amount.toString(),  // Claimed reward amount in wei (converted to string)
-      };
-      console.log("Transformed data for ERC20RewardClaimed:", JSON.stringify(jsonData, null, 2));
+      jsonData = await erc20RewardClaimedEventHandler(
+        decodedEvent,
+        eType,
+        jsonData
+      );
       break;
     }
 
@@ -218,6 +142,177 @@ async function transformSubscriptionEvents(decodedEvent, event, eType) {
       return null; // Or handle this case as needed
   }
 
+  return jsonData;
+}
+
+async function stakingEventsHandler(decodedEvent, eType, jsonData) {
+	// Ensure that all expected fields are present
+	const expectedFields = ['_by', '_tokenId', '_when'];
+	const hasAllFields = expectedFields.every(
+		(field) => field in decodedEvent.decodedParameters
+	);
+
+	if (!hasAllFields) {
+		console.error(
+			'Error: Missing fields in decoded parameters for Staked/Unstaked'
+		);
+		return null; // Or handle this case as needed
+	}
+
+	// Store the event data for Staked and Unstaked
+	jsonData.events[eType] = {
+		by: decodedEvent.decodedParameters._by, // Address of the user who staked/unstaked
+		tokenId: parseInt(decodedEvent.decodedParameters._tokenId, 10), // Token ID involved
+		timestamp: decodedEvent.decodedParameters._when // Timestamp when the action occurred
+  };
+  return jsonData;
+}
+
+async function tokenDepositedEventHandler(decodedEvent, eType, jsonData) {
+	const expectedFields = [
+		'depositToken',
+		'depositOwner',
+		'depositAmount',
+		'depositDuration',
+		'account'
+	];
+	const hasAllFields = expectedFields.every(
+		(field) => field in decodedEvent.decodedParameters
+	);
+
+	if (!hasAllFields) {
+		console.error(
+			'Error: Missing fields in decoded parameters for TokenDeposited'
+		);
+		return null; // Handle this case as needed
+	}
+
+	// Store the event data for TokenDeposited
+	const account = decodedEvent.decodedParameters.account;
+
+	if (
+		!account ||
+		!(
+			'amountLocked' in account &&
+			'maturesOn' in account &&
+			'lastUpdatedOn' in account &&
+			'createdOn' in account
+		)
+	) {
+		console.error(
+			"Error: Missing fields in 'account' struct for TokenDeposited"
+		);
+		return null;
+	}
+
+	jsonData.events[eType] = {
+		depositToken: decodedEvent.decodedParameters.depositToken, // Token address
+		depositOwner: decodedEvent.decodedParameters.depositOwner, // Address of the deposit owner
+		depositAmount: decodedEvent.decodedParameters.depositAmount, // Amount transferred
+		depositDuration: decodedEvent.decodedParameters.depositDuration, // Duration in seconds
+		account: {
+			amountLocked: account.amountLocked, // Amount locked in the contract (Wei)
+			maturesOn: account.maturesOn, // Timestamp when tokens can be unlocked
+			lastUpdatedOn: account.lastUpdatedOn, // Last update timestamp
+			createdOn: account.createdOn // Account creation timestamp
+		}
+	};
+	console.log('Transformed data:', JSON.stringify(jsonData, null, 2)); // Log the full data
+	return jsonData;
+}
+
+async function tokenWithdrawnEventHandler(decodedEvent, eType, jsonData) {
+	const expectedFields = ['depositToken', 'depositOwner', 'to', 'account'];
+	const hasAllFields = expectedFields.every(
+		(field) => field in decodedEvent.decodedParameters
+	);
+
+	if (!hasAllFields) {
+		console.error(
+			'Error: Missing fields in decoded parameters for TokenWithdrawn'
+		);
+		return null; // Handle this case as needed
+	}
+
+	// Store the event data for TokenWithdrawn
+	const account = decodedEvent.decodedParameters.account;
+
+	if (
+		!account ||
+		!(
+			'amountLocked' in account &&
+			'maturesOn' in account &&
+			'lastUpdatedOn' in account &&
+			'createdOn' in account
+		)
+	) {
+		console.error(
+			"Error: Missing fields in 'account' struct for TokenWithdrawn"
+		);
+		return null;
+	}
+
+	jsonData.events[eType] = {
+		depositToken: decodedEvent.decodedParameters.depositToken, // Token address
+		depositOwner: decodedEvent.decodedParameters.depositOwner, // Address of the deposit owner
+		to: decodedEvent.decodedParameters.to, // Address the tokens were sent to
+		account: {
+			amountLocked: account.amountLocked, // Amount locked in the contract (Wei)
+			maturesOn: account.maturesOn, // Timestamp when tokens can be unlocked
+			lastUpdatedOn: account.lastUpdatedOn, // Last update timestamp
+			createdOn: account.createdOn // Account creation timestamp
+		}
+	};
+  console.log('Transformed data:', JSON.stringify(jsonData, null, 2)); // Log the full data
+  return jsonData
+}
+
+async function rootChangedEventHandler(decodedEvent, eType, jsonData) { 
+   const expectedFields = ['by', 'root'];
+		const hasAllFields = expectedFields.every(
+			(field) => field in decodedEvent.decodedParameters
+		);
+
+		if (!hasAllFields) {
+			console.error(
+				'Error: Missing fields in decoded parameters for RootChanged'
+			);
+			return null;
+		}
+
+		jsonData.events[eType] = {
+			by: decodedEvent.decodedParameters.by, // Address of the user who changed the root
+			root: decodedEvent.decodedParameters.root // New Merkle root (bytes32)
+		};
+		console.log(
+			'Transformed data for RootChanged:',
+			JSON.stringify(jsonData, null, 2)
+    );
+  return jsonData;
+}
+
+async function erc20RewardClaimedEventHandler(decodedEvent, eType, jsonData) {
+  const expectedFields = ['rewardToken', 'user', 'amount'];
+	const hasAllFields = expectedFields.every(
+		(field) => field in decodedEvent.decodedParameters
+	);
+
+	if (!hasAllFields) {
+		console.error(
+			'Error: Missing fields in decoded parameters for ERC20RewardClaimed'
+		);
+		return null;
+	}
+
+	jsonData.events[eType] = {
+		rewardToken: decodedEvent.decodedParameters.rewardToken, // Address of the reward token contract
+		user: decodedEvent.decodedParameters.user, // Address of the user claiming the reward
+		amount: decodedEvent.decodedParameters.amount.toString() // Claimed reward amount in wei (converted to string)
+	};
+	console.log(
+		'Transformed data for ERC20RewardClaimed:',
+		JSON.stringify(jsonData, null, 2)
+  );
   return jsonData;
 }
 

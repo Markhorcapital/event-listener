@@ -59,7 +59,7 @@ Set up the following environment variables in your `.env` file:
 
 ```bash
 AWS_SECRET_NAME=
-AWS_DEFAULT_REGION="us-east-2"
+AWS_REGION="us-east-2"
 WEB3_PROVIDER=wss://eth-sepolia.g.alchemy.com/v2/<your-api-key>
 
 HIVE_EVENT_HANDLER_SQS=https://sqs.us-east-2.amazonaws.com/<your-queue-id>
@@ -92,24 +92,24 @@ ERC20_REWARD_CLAIMED=0x617dc33bfe6c05895429aa10442ff5716e0040e90d0c04faa92ced6a4
 
 ```json
 {
-  "eventType": "TokenDeposited",
-  "contractAddress": "0x4b3717169BE7319B0B35a36905C6671262130aa9",
-  "chainId": 1,
-  "transactionHash": "0xa51e7d9df1c4242acea423487c269e1917f004410d9e21f88a614ca89235db50",
-  "events": {
-    "TokenDeposited": {
-      "depositToken": "0x2722727d9DeB5962f7166E03aE81b1169f784A11",
-      "depositOwner": "0x707562da7C5e689F23139f4ACc354D163a18985a",
-      "depositAmount": "1000000000000000000",
-      "depositDuration": "60",
-      "account": {
-        "amountLocked": "2000000000000000000",
-        "maturesOn": "1727106120",
-        "lastUpdatedOn": "1727106060",
-        "createdOn": "1727105820"
-      }
-    }
-  }
+	"eventType": "TokenDeposited",
+	"contractAddress": "0x4b3717169BE7319B0B35a36905C6671262130aa9",
+	"chainId": 1,
+	"transactionHash": "0xa51e7d9df1c4242acea423487c269e1917f004410d9e21f88a614ca89235db50",
+	"events": {
+		"TokenDeposited": {
+			"depositToken": "0x2722727d9DeB5962f7166E03aE81b1169f784A11",
+			"depositOwner": "0x707562da7C5e689F23139f4ACc354D163a18985a",
+			"depositAmount": "1000000000000000000",
+			"depositDuration": "60",
+			"account": {
+				"amountLocked": "2000000000000000000",
+				"maturesOn": "1727106120",
+				"lastUpdatedOn": "1727106060",
+				"createdOn": "1727105820"
+			}
+		}
+	}
 }
 ```
 
@@ -117,23 +117,23 @@ ERC20_REWARD_CLAIMED=0x617dc33bfe6c05895429aa10442ff5716e0040e90d0c04faa92ced6a4
 
 ```json
 {
-  "eventType": "TokenWithdrawn",
-  "contractAddress": "0x4b3717169BE7319B0B35a36905C6671262130aa9",
-  "chainId": 1,
-  "transactionHash": "0x2397d644a5a6b3e15c37bb32981ad0dfcef3e563f50b91405d110e380ad556b9",
-  "events": {
-    "TokenWithdrawn": {
-      "depositToken": "0x2722727d9DeB5962f7166E03aE81b1169f784A11",
-      "depositOwner": "0x707562da7C5e689F23139f4ACc354D163a18985a",
-      "to": "0x707562da7C5e689F23139f4ACc354D163a18985a",
-      "account": {
-        "amountLocked": "2000000000000000000",
-        "maturesOn": "1727106120",
-        "lastUpdatedOn": "1727106060",
-        "createdOn": "1727105820"
-      }
-    }
-  }
+	"eventType": "TokenWithdrawn",
+	"contractAddress": "0x4b3717169BE7319B0B35a36905C6671262130aa9",
+	"chainId": 1,
+	"transactionHash": "0x2397d644a5a6b3e15c37bb32981ad0dfcef3e563f50b91405d110e380ad556b9",
+	"events": {
+		"TokenWithdrawn": {
+			"depositToken": "0x2722727d9DeB5962f7166E03aE81b1169f784A11",
+			"depositOwner": "0x707562da7C5e689F23139f4ACc354D163a18985a",
+			"to": "0x707562da7C5e689F23139f4ACc354D163a18985a",
+			"account": {
+				"amountLocked": "2000000000000000000",
+				"maturesOn": "1727106120",
+				"lastUpdatedOn": "1727106060",
+				"createdOn": "1727105820"
+			}
+		}
+	}
 }
 ```
 
@@ -143,17 +143,17 @@ ERC20_REWARD_CLAIMED=0x617dc33bfe6c05895429aa10442ff5716e0040e90d0c04faa92ced6a4
 
 ```json
 {
-  "eventType": "Staked",
-  "contractAddress": "0xE856B97c2015293814b4bb5a970b3eE507C118cB",
-  "chainId": 1,
-  "transactionHash": "0x87d8824f461e1b909d8dbd9f64f074d038c8fe921898c77105b7dafb58dd7acf",
-  "events": {
-    "Staked": {
-      "by": "0x707562da7C5e689F23139f4ACc354D163a18985a",
-      "tokenId": 11,
-      "timestamp": "1727115192"
-    }
-  }
+	"eventType": "Staked",
+	"contractAddress": "0xE856B97c2015293814b4bb5a970b3eE507C118cB",
+	"chainId": 1,
+	"transactionHash": "0x87d8824f461e1b909d8dbd9f64f074d038c8fe921898c77105b7dafb58dd7acf",
+	"events": {
+		"Staked": {
+			"by": "0x707562da7C5e689F23139f4ACc354D163a18985a",
+			"tokenId": 11,
+			"timestamp": "1727115192"
+		}
+	}
 }
 ```
 
@@ -161,17 +161,17 @@ ERC20_REWARD_CLAIMED=0x617dc33bfe6c05895429aa10442ff5716e0040e90d0c04faa92ced6a4
 
 ```json
 {
-  "eventType": "Unstaked",
-  "contractAddress": "0xE856B97c2015293814b4bb5a970b3eE507C118cB",
-  "chainId": 1,
-  "transactionHash": "0x8dc1116e7af64b6aec0393bf6b77445d14f44a6fdf62b8f1d620b00da3127b9e",
-  "events": {
-    "Unstaked": {
-      "by": "0x707562da7C5e689F23139f4ACc354D163a18985a",
-      "tokenId": 11,
-      "timestamp": "1727115252"
-    }
-  }
+	"eventType": "Unstaked",
+	"contractAddress": "0xE856B97c2015293814b4bb5a970b3eE507C118cB",
+	"chainId": 1,
+	"transactionHash": "0x8dc1116e7af64b6aec0393bf6b77445d14f44a6fdf62b8f1d620b00da3127b9e",
+	"events": {
+		"Unstaked": {
+			"by": "0x707562da7C5e689F23139f4ACc354D163a18985a",
+			"tokenId": 11,
+			"timestamp": "1727115252"
+		}
+	}
 }
 ```
 
@@ -179,16 +179,16 @@ ERC20_REWARD_CLAIMED=0x617dc33bfe6c05895429aa10442ff5716e0040e90d0c04faa92ced6a4
 
 ```json
 {
-  "eventType": "RootChanged",
-  "contractAddress": "0xA6EC8541979FC97aA9bEd11798fc562cCA577E87",
-  "chainId": 1,
-  "transactionHash": "0x65854b111eab17273e7e42c1c6ede7a915641a896e36b96ef91e305d03b642c2",
-  "events": {
-    "RootChanged": {
-      "by": "0x27658b44BBbD1a640354F0845b09e709eCE428CC",
-      "root": "0xc38cce658171a4f5c7722b377dbdcafc6662ad1c3d253851d7cc502e3a488978"
-    }
-  }
+	"eventType": "RootChanged",
+	"contractAddress": "0xA6EC8541979FC97aA9bEd11798fc562cCA577E87",
+	"chainId": 1,
+	"transactionHash": "0x65854b111eab17273e7e42c1c6ede7a915641a896e36b96ef91e305d03b642c2",
+	"events": {
+		"RootChanged": {
+			"by": "0x27658b44BBbD1a640354F0845b09e709eCE428CC",
+			"root": "0xc38cce658171a4f5c7722b377dbdcafc6662ad1c3d253851d7cc502e3a488978"
+		}
+	}
 }
 ```
 
@@ -196,17 +196,17 @@ ERC20_REWARD_CLAIMED=0x617dc33bfe6c05895429aa10442ff5716e0040e90d0c04faa92ced6a4
 
 ```json
 {
-  "eventType": "ERC20RewardClaimed",
-  "contractAddress": "0xA6EC8541979FC97aA9bEd11798fc562cCA577E87",
-  "chainId": 1,
-  "transactionHash": "0xdbc6ac3f29289097f0619c3b35d9a056cccbeb0b12ee283f8b2c76b77ce7a7e8",
-  "events": {
-    "ERC20RewardClaimed": {
-      "rewardToken": "0x2722727d9DeB5962f7166E03aE81b1169f784A11",
-      "user": "0xf8E00719181774261Fb58Fb1e21c7F3317035045",
-      "amount": "3000000000000000000"
-    }
-  }
+	"eventType": "ERC20RewardClaimed",
+	"contractAddress": "0xA6EC8541979FC97aA9bEd11798fc562cCA577E87",
+	"chainId": 1,
+	"transactionHash": "0xdbc6ac3f29289097f0619c3b35d9a056cccbeb0b12ee283f8b2c76b77ce7a7e8",
+	"events": {
+		"ERC20RewardClaimed": {
+			"rewardToken": "0x2722727d9DeB5962f7166E03aE81b1169f784A11",
+			"user": "0xf8E00719181774261Fb58Fb1e21c7F3317035045",
+			"amount": "3000000000000000000"
+		}
+	}
 }
 ```
 
