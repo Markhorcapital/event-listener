@@ -15,37 +15,58 @@ AWS.config.update({
 
 const client = new AWS.SecretsManager();
 
-async function loadEnvSecrets() {
-	try {
-		const data = await client
-			.getSecretValue({ SecretId: process.env.AWS_SECRET_NAME })
-			.promise();
-		const aws_env = JSON.parse(data.SecretString);
+class Secrets {
+	constructor() {
+		this.secrets = {};
+	}
 
-		const env_list = [
-			`AWS_SECRET_NAME=${process.env.AWS_SECRET_NAME}`,
-			`AWS_REGION=${process.env.AWS_REGION}`,
-			`AWS_ACCESS_KEY_ID=${process.env.AWS_ACCESS_KEY_ID}`, // Add AWS Access Key ID to env list
-			`AWS_SECRET_ACCESS_KEY=${process.env.AWS_SECRET_ACCESS_KEY}` // Add AWS Secret Access Key to env list
-		];
+	async loadSecrets() {
+		try {
+			const data = await client
+				.getSecretValue({ SecretId: process.env.AWS_SECRET_NAME })
+				.promise();
+			const aws_env = JSON.parse(data.SecretString);
 
-		Object.keys(aws_env).forEach((key) => {
-			env_list.push(`${key}=${aws_env[key]}`);
-		});
+			// Store the secrets in the class instance
+			this.secrets = {
+				...aws_env,
+				AWS_SECRET_NAME: process.env.AWS_SECRET_NAME,
+				AWS_REGION: process.env.AWS_REGION,
+				AWS_ACCESS_KEY_ID: process.env.AWS_ACCESS_KEY_ID,
+				AWS_SECRET_ACCESS_KEY: process.env.AWS_SECRET_ACCESS_KEY
+			};
 
-		await fs.writeFile('.env', env_list.join('\n'), 'utf-8');
-		console.log(
-			'-------------- Finished loading secrets from AWS --------------'
-		);
-	} catch (err) {
-		console.error(
-			'-------------- Error occurred during loading env from AWS --------------'
-		);
-		console.error(err);
+			// await fs.writeFile('.env', env_list.join('\n'), 'utf-8');
+			// console.log(
+			// 	'-------------- Finished loading secrets from AWS --------------'
+			// );
+		} catch (err) {
+			console.error(
+				'-------------- Error occurred during loading env from AWS --------------'
+			);
+			console.error(err);
+		}
+	}
+
+	// Method to get secrets
+	getSecret(key) {
+		return this.secrets[key];
+	}
+
+	// Method to get all secrets
+	getAllSecrets() {
+		return this.secrets;
 	}
 }
 
-loadEnvSecrets();
+// Export a singleton instance of the Secrets class
+const secretsInstance = new Secrets();
+module.exports = { secrets: secretsInstance };
+
+// Load secrets when the module is imported
+(async () => {
+	await secretsInstance.loadSecrets();
+})();
 
 // changing the code
 
