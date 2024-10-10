@@ -47,6 +47,8 @@ async function loadEnvSecrets() {
 
 loadEnvSecrets();
 
+// changing the code
+
 // /** @format */
 
 // const fs = require('fs/promises'); // Use fs.promises for async file operations
