@@ -1,6 +1,5 @@
 /** @format */
 
-const fs = require('fs/promises'); // Use fs.promises for async file operations
 const AWS = require('aws-sdk');
 const dotenv = require('dotenv');
 
@@ -20,7 +19,8 @@ class Secrets {
 		this.secrets = {};
 	}
 
-	async loadSecrets() {
+  async loadSecrets() {
+    if (this.loaded) return;
 		try {
 			const data = await client
 				.getSecretValue({ SecretId: process.env.AWS_SECRET_NAME })
@@ -34,12 +34,9 @@ class Secrets {
 				AWS_REGION: process.env.AWS_REGION,
 				AWS_ACCESS_KEY_ID: process.env.AWS_ACCESS_KEY_ID,
 				AWS_SECRET_ACCESS_KEY: process.env.AWS_SECRET_ACCESS_KEY
-			};
-
-			// await fs.writeFile('.env', env_list.join('\n'), 'utf-8');
-			// console.log(
-			// 	'-------------- Finished loading secrets from AWS --------------'
-			// );
+      };
+      this.loaded = true;
+      
 		} catch (err) {
 			console.error(
 				'-------------- Error occurred during loading env from AWS --------------'
@@ -50,23 +47,24 @@ class Secrets {
 
 	// Method to get secrets
 	getSecret(key) {
+		if (!this.loaded) {
+			throw new Error('Secrets not loaded yet!');
+		}
 		return this.secrets[key];
 	}
 
 	// Method to get all secrets
 	getAllSecrets() {
+		if (!this.loaded) {
+			throw new Error('Secrets not loaded yet!');
+		}
 		return this.secrets;
 	}
 }
 
 // Export a singleton instance of the Secrets class
-const secretsInstance = new Secrets();
-module.exports = { secrets: secretsInstance };
-
 // Load secrets when the module is imported
-(async () => {
-	await secretsInstance.loadSecrets();
-})();
+module.exports = new Secrets();
 
 // changing the code
 
