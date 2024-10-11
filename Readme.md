@@ -213,3 +213,19 @@ ERC20_REWARD_CLAIMED=0x617dc33bfe6c05895429aa10442ff5716e0040e90d0c04faa92ced6a4
 ## License
 
 This project is licensed under the MIT License.
+
+## Project Execution Flow
+
+=> With 'npm run dev', the prestart code runs which is load_env.js.
+=> The load_env.js loads the environment variables from .env file.
+=> secrets are then fetched from the AWS secrets manager and then stored in a class named "Secrets" and it present in the global context so that every other file can access the instance of "Secrets".
+=> After the prestart, index.js run  and then the other files.
+
+## Manager.js
+
+=> In manager.js all the subscriptions are made and websockets starts listening to the subscribes events.
+
+## Utils.js
+
+=> utils.js holds all the utility functions required by other scripts.
+=> Like decodeLog(), sendEventToSQS(), transformSubscriptionEvents().
