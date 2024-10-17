@@ -1,13 +1,15 @@
 /** @format */
 
-const secrets = require('./load_env.js');
+const Secrets = require('./server/utils/secrets');
+const loadSecrets = require('./load_env');
 const express = require('express');
 const Sentry = require('@sentry/node');
+
 (async () => {
-	await secrets.loadSecrets();
+	await loadSecrets();
 	const { startProcessing } = require('./server/manager.js');
 	const app = express();
-	const { PORT, SENTRY_DSN } = secrets;
+	const { PORT, SENTRY_DSN } = Secrets;
 
 	app.use(express.json());
 

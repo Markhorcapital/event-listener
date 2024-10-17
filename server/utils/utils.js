@@ -1,7 +1,7 @@
 /** @format */
 
 const { SQSClient, SendMessageCommand } = require('@aws-sdk/client-sqs');
-const secrets = require('../../load_env.js');
+const Secrets = require('../../server/utils/secrets');
 const { abi } = require('../../abi/NFTStakingV2.json');
 const { abi: stakingAbi } = require('../../abi/ERC1363StakingTrackerV1.json');
 const { abi: reward_system_abi } = require('../../abi/RewardSystem.json');
@@ -19,7 +19,8 @@ const { captureException } = require('@sentry/node');
 		ROOT_CHANGED_TOPIC,
 		ERC20_REWARD_CLAIMED,
 		CHAIN_ID
-	} = secrets;
+  } = Secrets;
+  
 	const sqs = new SQSClient({ region: AWS_REGION });
 
 	// Create a mapping of event signatures to their ABI entries

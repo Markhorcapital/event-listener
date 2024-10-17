@@ -1,7 +1,6 @@
 /** @format */
 const { captureException } = require('@sentry/node');
 const { web3 } = require('../config/web3Instance');
-const secrets = require('../load_env.js');
 const {
   sendEventToSQS,
   decodeLog,
@@ -9,6 +8,7 @@ const {
 } = require('./utils/utils');
 
 (async () => {
+  const Secrets = require('./utils/secrets');
 	const {
 		NFT_STAKING_ADDRESS,
 		NFT_STAKED_TOPIC,
@@ -19,7 +19,7 @@ const {
 		REWARD_SYSTEM_CONTRACT,
 		ROOT_CHANGED_TOPIC,
 		ERC20_REWARD_CLAIMED
-	} = secrets;
+	} = Secrets;
 
 	const processEvent = async (event) => {
 		try {
