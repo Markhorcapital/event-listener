@@ -1,7 +1,7 @@
 /** @format */
 
 const { SQSClient, SendMessageCommand } = require('@aws-sdk/client-sqs');
-const Secrets = require('../../server/utils/secrets');
+const {Secrets} = require('../../server/utils/secrets');
 const { abi } = require('../../abi/NFTStakingV2.json');
 const { abi: stakingAbi } = require('../../abi/ERC1363StakingTrackerV1.json');
 const { abi: reward_system_abi } = require('../../abi/RewardSystem.json');

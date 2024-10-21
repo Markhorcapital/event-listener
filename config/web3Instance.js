@@ -1,7 +1,7 @@
 /** @format */
 const { captureException } = require('@sentry/node');
 const Web3 = require('web3');
-const Secrets = require('../server/utils/secrets');
+const {Secrets} = require('../server/utils/secrets');
 let web3;
 let nft_staking_contract;
 let reward_system_contract;

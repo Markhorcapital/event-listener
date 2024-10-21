@@ -8,7 +8,7 @@ const {
 } = require('./utils/utils');
 
 (async () => {
-  const Secrets = require('./utils/secrets');
+  const { Secrets } = require('./utils/secrets');
 	const {
 		NFT_STAKING_ADDRESS,
 		NFT_STAKED_TOPIC,

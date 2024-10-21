@@ -1,6 +1,6 @@
 /** @format */
 
-const Secrets = require('./server/utils/secrets');
+const {Secrets} = require('./server/utils/secrets');
 const loadSecrets = require('./load_env');
 const express = require('express');
 const Sentry = require('@sentry/node');
