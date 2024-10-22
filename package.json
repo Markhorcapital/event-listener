@@ -4,6 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "prestart": "node load_env.js",
     "start": "node index.js",
     "start_sqs": "node index.js",
     "dev": "nodemon index.js"
