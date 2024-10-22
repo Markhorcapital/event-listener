@@ -1,18 +1,14 @@
 /** @format */
-const { captureException } = require("@sentry/node");
-const Web3 = require("web3");
-require("dotenv").config();
-const NFT_STAKING_ADDRESS = process.env.NFT_STAKING_ADDRESS;
-const REWARD_SYSTEM_CONTRACT = process.env.REWARD_SYSTEM_CONTRACT;
-const WEB3_PROVIDER = process.env.WEB3_PROVIDER;
-
+const { captureException } = require('@sentry/node');
+const Web3 = require('web3');
+const {Secrets} = require('../server/utils/secrets');
 let web3;
 let nft_staking_contract;
 let reward_system_contract;
+const { abi } = require('../abi/NFTStakingV2.json');
+const { abi: reward_system_abi } = require('../abi/RewardSystem.json');
 
-
-const { abi } = require("../abi/NFTStakingV2.json");
-const { abi: reward_system_abi } = require('../abi/RewardSystem.json')
+const { NFT_STAKING_ADDRESS, REWARD_SYSTEM_CONTRACT, WEB3_PROVIDER } = Secrets;
 
 // Function to create a new web3 instance and contract
 async function createWeb3Instance(retryCount = 0) {
@@ -21,28 +17,29 @@ async function createWeb3Instance(retryCount = 0) {
       auto: true,
       delay: 5000, // ms
       maxAttempts: 5,
-      onTimeout: false,
-    },
+      onTimeout: false
+    }
   });
 
-  provider.on("connect", () => console.log("WebSocket Connected"));
-  provider.on("end", () => {
-    console.log("WebSocket disconnected! Attempting to reconnect...");
+  provider.on('connect', () => console.log('WebSocket Connected'));
+  provider.on('end', () => {
+    console.log('WebSocket disconnected! Attempting to reconnect...');
     const delay = calculateBackoffDelay(retryCount);
     setTimeout(() => createWeb3Instance(retryCount + 1), delay);
   });
-  provider.on("error", (e) => {
-    console.error("WebSocket encountered an error:", e);
+  provider.on('error', (e) => {
+    console.error('WebSocket encountered an error:', e);
     provider.disconnect();
   });
 
   web3 = new Web3(provider);
 
   nft_staking_contract = new web3.eth.Contract(abi, NFT_STAKING_ADDRESS);
-  reward_system_contract = new web3.eth.Contract(reward_system_abi, REWARD_SYSTEM_CONTRACT);
-
+  reward_system_contract = new web3.eth.Contract(
+    reward_system_abi,
+    REWARD_SYSTEM_CONTRACT
+  );
 }
-
 
 // Function to calculate the backoff delay
 function calculateBackoffDelay(retryCount) {
@@ -56,8 +53,8 @@ async function getChainId() {
   try {
     return await web3.eth.getChainId();
   } catch (error) {
-    console.error("Error getting chain ID:", error);
-    captureException(error)
+    console.error('Error getting chain ID:', error);
+    captureException(error);
     throw error;
   }
 }
@@ -66,8 +63,8 @@ async function getLatestBlockNumber() {
   try {
     return await web3.eth.getBlockNumber();
   } catch (error) {
-    console.error("Error getting block number:", error);
-    captureException(error)
+    console.error('Error getting block number:', error);
+    captureException(error);
     throw error;
   }
 }
@@ -86,5 +83,5 @@ module.exports = {
     return reward_system_contract;
   },
   getChainId,
-  getLatestBlockNumber,
+  getLatestBlockNumber
 };
