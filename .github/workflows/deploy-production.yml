@@ -24,9 +24,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
-      - name: Create env file
-        run: |
-          echo "${{ secrets.ENV_PROD }}" > .env
+      - name: Create .env file
+        uses: ozaytsev86/create-env-file@v1
+        with:
+          ENV_AWS_SECRET_NAME: ${{ secrets.AWS_SECRET_NAME_PROD }}
+          ENV_AWS_REGION: ${{ secrets.AWS_REGION }}
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v1
