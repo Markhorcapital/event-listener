@@ -1,91 +1,56 @@
 /** @format */
 
-const fs = require('fs/promises'); // Use fs.promises for async file operations
-const AWS = require('aws-sdk');
-const dotenv = require('dotenv');
+const AWS = require('aws-sdk'); // AWS SDK for interacting with AWS services
+const dotenv = require('dotenv'); // dotenv for loading environment variables from a .env file
+const { Secrets, ISecrets } = require('./server/utils/secrets'); // Custom Secrets class for managing configuration
 
 dotenv.config();
 
-// Set the AWS credentials from environment variables
-AWS.config.update({
-	region: process.env.AWS_REGION,
-	accessKeyId: process.env.AWS_ACCESS_KEY_ID, // Load AWS Access Key ID from environment
-	secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY // Load AWS Secret Access Key from environment
-});
+async function loadSecrets() {
+	if (process.env.NODE_ENV === 'development') {
+		try {
+			let env = { ...process.env };
+			for (const key of Object.keys(ISecrets)) {
+				ISecrets[key] = env[key];
+			}
+			Secrets.setSecrets(ISecrets);
+		} catch (err) {
+			console.error(
+				'-------------- Error occurred during loading secrets from env --------------',
+				err
+			);
+		}
+	} else {
+		try {
+			// Configure AWS SDK with the region specified in environment variables
+			AWS.config.update({
+				region: process.env.AWS_REGION
+			});
 
-const client = new AWS.SecretsManager();
+			// Create a new SecretsManager client to interact with AWS Secrets Manager
+			const client = new AWS.SecretsManager();
+			// Fetch the secret value from AWS Secrets Manager based on the SecretId
+			const data = await client
+				.getSecretValue({ SecretId: process.env.AWS_SECRET_NAME })
+				.promise();
+			const aws_env = JSON.parse(data.SecretString);
 
-async function loadEnvSecrets() {
-	try {
-		const data = await client
-			.getSecretValue({ SecretId: process.env.AWS_SECRET_NAME })
-			.promise();
-		const aws_env = JSON.parse(data.SecretString);
+			// Combine the secrets from AWS with additional environment variables
+			let secrets = {
+				...aws_env,
+				AWS_SECRET_NAME: process.env.AWS_SECRET_NAME,
+				AWS_REGION: process.env.AWS_REGION
+			};
 
-		const env_list = [
-			`AWS_SECRET_NAME=${process.env.AWS_SECRET_NAME}`,
-			`AWS_REGION=${process.env.AWS_REGION}`,
-			`AWS_ACCESS_KEY_ID=${process.env.AWS_ACCESS_KEY_ID}`, // Add AWS Access Key ID to env list
-			`AWS_SECRET_ACCESS_KEY=${process.env.AWS_SECRET_ACCESS_KEY}` // Add AWS Secret Access Key to env list
-		];
-
-		Object.keys(aws_env).forEach((key) => {
-			env_list.push(`${key}=${aws_env[key]}`);
-		});
-
-		await fs.writeFile('.env', env_list.join('\n'), 'utf-8');
-		console.log(
-			'-------------- Finished loading secrets from AWS --------------'
-		);
-	} catch (err) {
-		console.error(
-			'-------------- Error occurred during loading env from AWS --------------'
-		);
-		console.error(err);
+			// Set the secrets into the Secrets class for application-wide access
+			Secrets.setSecrets(secrets);
+		} catch (err) {
+			console.error(
+				'-------------- Error occurred during loading secrets from AWS --------------',
+				err
+			);
+		}
 	}
 }
-
-loadEnvSecrets();
-
-// /** @format */
-
-// const fs = require('fs/promises'); // Use fs.promises for async file operations
-
-// const AWS = require('aws-sdk');
-// const dotenv = require('dotenv');
-
-// dotenv.config();
-// AWS.config.update({ region: process.env.AWS_REGION });
-// const client = new AWS.SecretsManager();
-
-// async function loadEnvSecrets() {
-// 	try {
-// 		const data = await client
-// 			.getSecretValue({ SecretId: process.env.AWS_SECRET_NAME })
-// 			.promise();
-// 		const aws_env = JSON.parse(data.SecretString);
-
-// 		const env_list = [
-// 			`AWS_SECRET_NAME=${process.env.AWS_SECRET_NAME}`,
-// 			`AWS_REGION=${process.env.AWS_REGION}`
-// 		];
-
-// 		Object.keys(aws_env).forEach((key) => {
-// 			env_list.push(`${key}=${aws_env[key]}`);
-// 			console.log('key', key);
-// 		});
-
-// 		await fs.writeFile('.env', env_list.join('\n'), 'utf-8');
-// 		console.log(
-// 			'-------------- Finished loading secrets from AWS --------------'
-// 		);
-// 		console.log('env_list', env_list);
-// 	} catch (err) {
-// 		console.error(
-// 			'-------------- Error occurred during loading env from AWS --------------'
-// 		);
-// 		console.error(err);
-// 	}
-// }
-
-// loadEnvSecrets();
+// loadSecrets();
+module.exports = loadSecrets;
