@@ -17,5 +17,5 @@ COPY . .
 # EXPOSE 3000
 
 # Specify the command to run your application
-# ENTRYPOINT ["tail", "-f", "/dev/null"]
+#ENTRYPOINT ["tail", "-f", "/dev/null"]
 CMD ["npm", "start"]
