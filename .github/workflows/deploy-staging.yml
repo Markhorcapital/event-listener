@@ -35,7 +35,7 @@ jobs:
       uses: ozaytsev86/create-env-file@v1
       with:
         ENV_AWS_SECRET_NAME: ${{ secrets.AWS_SECRET_NAME_STG}}
-        ENV_AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
+        ENV_AWS_REGION: ${{ secrets.AWS_REGION }}
     
     - name: Login to Amazon ECR
       id: login-ecr
