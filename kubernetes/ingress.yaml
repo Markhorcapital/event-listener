@@ -6,17 +6,17 @@ metadata:
   annotations:
     alb.ingress.kubernetes.io/scheme: internet-facing
     alb.ingress.kubernetes.io/target-type: ip
-    alb.ingress.kubernetes.io/group.name: aiprotocol
-    alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:us-east-2:138129797063:certificate/658e06c8-6e2e-40cc-958b-57b1dd8d8ac0
+    alb.ingress.kubernetes.io/group.name: backend
+    alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:us-east-2:577638381877:certificate/531ac222-b136-4e79-b251-12b5a49540c4
     alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS": 443}]'
-    alb.ingress.kubernetes.io/wafv2-acl-arn: arn:aws:wafv2:us-east-2:138129797063:regional/webacl/aiprotocol-eks-waf/d51f169a-8844-48d4-a32e-49d8c6e649a9
+    alb.ingress.kubernetes.io/wafv2-acl-arn: arn:aws:wafv2:us-east-2:577638381877:regional/webacl/aliagents-stg/d0b140e2-011d-4416-ba2b-f00bf49a524b
     alb.ingress.kubernetes.io/wafv2-acl-scope: regional
   labels:
     app: _APP_NAME
 spec:
   ingressClassName: alb
   rules:
-    - host: _NAMESPACE-_APP_NAME.propolis.ai
+    - host: _NAMESPACE-_APP_NAME.aliagents.ai
       http:
         paths:
         - path: /
