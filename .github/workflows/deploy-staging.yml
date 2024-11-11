@@ -6,6 +6,7 @@ on:
 
 env:
   APP_NAME: hive-listener               # set this to your App Name  (Its should be lowercase)
+  AWS_Account_ID: 577638381877
   AWS_REGION: us-east-2                 # set this to your preferred AWS region, e.g. us-west-1
   ECR_REPOSITORY: hive-listener         # set this to your Amazon ECR repository name
   NAMESPACE: stg                        # set this to the name of the k8s namespace
@@ -55,7 +56,7 @@ jobs:
 
     - name: Update Image Tag in deployment.yaml
       run: |
-        find kubernetes/ -type f -exec sed -i -e "s/_APP_NAME/$APP_NAME/g" -e "s/_NAMESPACE/$NAMESPACE/g" -e "s/_IMAGE_TAG/$IMAGE_TAG/g" {} +
+        find kubernetes/ -type f -exec sed -i -e "s/_APP_NAME/$APP_NAME/g" -e "s/_NAMESPACE/$NAMESPACE/g" -e "s/_IMAGE_TAG/$IMAGE_TAG/g" -e "s/_AWS_Account_ID/$AWS_Account_ID/g" {} +
 
     - name: Deploy to EKS
       run: |
