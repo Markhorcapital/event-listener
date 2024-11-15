@@ -1,0 +1,28 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: _APP_NAME
+  namespace: _NAMESPACE
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/group.name: backend
+    alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:us-east-2:182399679246:certificate/6dc775e7-7930-4c57-b06f-fc26a037c729
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS": 443}]'
+    alb.ingress.kubernetes.io/wafv2-acl-arn: arn:aws:wafv2:us-east-2:182399679246:regional/webacl/aliagents-prod/cd3155aa-acfb-4d4f-a002-4776a3f3a00f
+    alb.ingress.kubernetes.io/wafv2-acl-scope: regional
+  labels:
+    app: _APP_NAME
+spec:
+  ingressClassName: alb
+  rules:
+    - host: _NAMESPACE-_APP_NAME.aliagents.ai
+      http:
+        paths:
+        - path: /
+          pathType: Prefix
+          backend:
+            service:
+              name: _APP_NAME
+              port:
+                number: 80
