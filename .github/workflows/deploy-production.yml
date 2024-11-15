@@ -2,7 +2,7 @@ name: Deploy to Amazon EKS
 
 on:
   push:
-    branches: [ "stage-sol" ]
+    branches: [ "master-sol" ]
 
 env:
   APP_NAME: hive-listener               # set this to your App Name  (Its should be lowercase)
