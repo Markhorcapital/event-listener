@@ -23,7 +23,8 @@ const {
 		NFT_LINKED_TOPIC,
 		NFT_UNLINKED_TOPIC,
 		NFT_TRANSFER_TOPIC,
-		REVENANTS_ADDRESS
+		REVENANTS_ADDRESS,
+		INTELLILINKER_ADDRESS_V1
 	} = Secrets;
 
 	const processEvent = async (event) => {
@@ -101,6 +102,35 @@ const {
 				'logs',
 				{
 					address: INTELLILINKER_ADDRESS,
+					topics: [NFT_LINKED_TOPIC]
+				},
+				function (error) {
+					if (error) {
+						console.log(error);
+					}
+				}
+			)
+			.on('data', async function (log) {
+				const decodedLog = await decodeLog(log);
+				console.log('decodedLog', decodedLog);
+				if (decodedLog && !decodedLog.error) {
+					const eventData = await transformSubscriptionEvents(
+						decodedLog,
+						log,
+						decodedLog.eventName
+					);
+					await processEvent(eventData);
+				}
+			})
+			.on('error', console.error);
+	}
+
+	async function subscribeToAssetLinkV1Events() {
+		var subscription = web3.eth
+			.subscribe(
+				'logs',
+				{
+					address: INTELLILINKER_ADDRESS_V1,
 					topics: [NFT_LINKED_TOPIC]
 				},
 				function (error) {
@@ -301,6 +331,8 @@ const {
 
 			await subscribeToAssetLinkEvents();
 			await subscribeToAssetUnlinkEvents();
+
+			await subscribeToAssetLinkV1Events()
 
 			await subscribeToAliStakeEvents();
 			await subscribeToAliWithdrawnEvents();

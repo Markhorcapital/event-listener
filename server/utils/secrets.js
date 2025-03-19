@@ -55,7 +55,8 @@ const ISecrets = {
 	NFT_LINKED_TOPIC: null,
 	NFT_UNLINKED_TOPIC: null,
 	INTELLILINKER_ADDRESS: null,
-	NFT_TRANSFER_TOPIC: null
+	NFT_TRANSFER_TOPIC: null,
+	INTELLILINKER_ADDRESS_V1: null
 };
 
 class Secrets {
