@@ -357,19 +357,19 @@ const {
 
 	const startProcessing = async () => {
 		try {
-			// await subscribeToAssetStakedEvents();
-			// await subscribeToAssetUnstakedEvents();
+			await subscribeToAssetStakedEvents();
+			await subscribeToAssetUnstakedEvents();
 
-			// await subscribeToAssetLinkEvents();
-			// await subscribeToAssetUnlinkEvents();
+			await subscribeToAssetLinkEvents();
+			await subscribeToAssetUnlinkEvents();
 
-			// await subscribeToAssetLinkV1Events()
+			await subscribeToAssetLinkV1Events()
 
-			// await subscribeToAliStakeEvents();
-			// await subscribeToAliWithdrawnEvents();
+			await subscribeToAliStakeEvents();
+			await subscribeToAliWithdrawnEvents();
 
-			// await subscribeToRootChangedEvents();
-			// await subscribeToERC20RewardClaimedEvents();
+			await subscribeToRootChangedEvents();
+			await subscribeToERC20RewardClaimedEvents();
 
 			await subscribeToRevTransferEvents();
 			await subscribeToPodTransferEvents();
