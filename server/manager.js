@@ -199,9 +199,7 @@ const {
 				}
 			)
 			.on('data', async function (log) {
-				console.log("REV log: ", log);
 				const decodedLog = await decodeLog(log);
-				console.log('REV decodedLog: ', decodedLog);
 				if (decodedLog && !decodedLog.error) {
 					const eventData = await transformSubscriptionEvents(
 						decodedLog,
@@ -357,19 +355,19 @@ const {
 
 	const startProcessing = async () => {
 		try {
-			await subscribeToAssetStakedEvents();
-			await subscribeToAssetUnstakedEvents();
+			// await subscribeToAssetStakedEvents();
+			// await subscribeToAssetUnstakedEvents();
 
-			await subscribeToAssetLinkEvents();
-			await subscribeToAssetUnlinkEvents();
+			// await subscribeToAssetLinkEvents();
+			// await subscribeToAssetUnlinkEvents();
 
-			await subscribeToAssetLinkV1Events()
+			// await subscribeToAssetLinkV1Events()
 
-			await subscribeToAliStakeEvents();
-			await subscribeToAliWithdrawnEvents();
+			// await subscribeToAliStakeEvents();
+			// await subscribeToAliWithdrawnEvents();
 
-			await subscribeToRootChangedEvents();
-			await subscribeToERC20RewardClaimedEvents();
+			// await subscribeToRootChangedEvents();
+			// await subscribeToERC20RewardClaimedEvents();
 
 			await subscribeToRevTransferEvents();
 			await subscribeToPodTransferEvents();
