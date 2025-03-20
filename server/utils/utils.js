@@ -23,7 +23,8 @@ const { captureException } = require("@sentry/node");
     CHAIN_ID,
     NFT_LINKED_TOPIC,
     NFT_UNLINKED_TOPIC,
-	NFT_TRANSFER_TOPIC
+	NFT_TRANSFER_TOPIC,
+	NFT_EVENT_HANDLER_SQS
   } = Secrets;
 
   const sqs = new SQSClient({ region: AWS_REGION });
@@ -58,6 +59,18 @@ const { captureException } = require("@sentry/node");
     await sqs.send(new SendMessageCommand(params));
     console.log(
       "data added to HIVE_EVENT_HANDLER_SQS",
+      JSON.stringify(eventData, null, 2)
+    );
+  }
+  async function sendEventToNftSQS(eventData) {
+    // console.log("eventData", JSON.stringify(eventData, null, 2));
+    const params = {
+      MessageBody: JSON.stringify(eventData),
+      QueueUrl: NFT_EVENT_HANDLER_SQS,
+    };
+    await sqs.send(new SendMessageCommand(params));
+    console.log(
+      "data added to NFT_EVENT_HANDLER_SQS",
       JSON.stringify(eventData, null, 2)
     );
   }
@@ -106,7 +119,11 @@ const { captureException } = require("@sentry/node");
 
     switch (eType) {
       // Handling Staked and Unstaked events
-      case "Staked":
+      case "Staked": {
+        jsonData = await stakingEventsHandler(decodedEvent, eType, jsonData);
+        break;
+      }
+	  
       case "Unstaked": {
         jsonData = await stakingEventsHandler(decodedEvent, eType, jsonData);
         break;
@@ -123,8 +140,6 @@ const { captureException } = require("@sentry/node");
         jsonData = await unlinkedEventsHandler(decodedEvent, eType, jsonData);
         break;
       }
-
-	  
 
       // Handling TokenDeposited event
       case "TokenDeposited": {
@@ -401,5 +416,6 @@ const { captureException } = require("@sentry/node");
     sendEventToSQS,
     decodeLog,
     transformSubscriptionEvents,
+	sendEventToNftSQS
   };
 })();
