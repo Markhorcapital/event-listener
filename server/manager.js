@@ -23,6 +23,7 @@ const {
 		NFT_LINKED_TOPIC,
 		NFT_UNLINKED_TOPIC,
 		NFT_TRANSFER_TOPIC,
+		POD_ADDRESS,
 		REVENANTS_ADDRESS,
 		INTELLILINKER_ADDRESS_V1
 	} = Secrets;
@@ -183,12 +184,43 @@ const {
 			.on('error', console.error);
 	}
 
-	async function subscribeToNftTransferEvents() {
+	async function subscribeToRevTransferEvents() {
 		var subscription = web3.eth
 			.subscribe(
 				'logs',
 				{
 					address: REVENANTS_ADDRESS,
+					topics: [NFT_TRANSFER_TOPIC]
+				},
+				function (error) {
+					if (error) {
+						console.log(error);
+					}
+				}
+			)
+			.on('data', async function (log) {
+				console.log("REV log: ", log);
+				const decodedLog = await decodeLog(log);
+				console.log('REV decodedLog: ', decodedLog);
+				if (decodedLog && !decodedLog.error) {
+					const eventData = await transformSubscriptionEvents(
+						decodedLog,
+						log,
+						decodedLog.eventName
+					);
+
+					await processEvent(eventData);
+				}
+			})
+			.on('error', console.error);
+	}
+
+	async function subscribeToPodTransferEvents() {
+		var subscription = web3.eth
+			.subscribe(
+				'logs',
+				{
+					address: POD_ADDRESS,
 					topics: [NFT_TRANSFER_TOPIC]
 				},
 				function (error) {
@@ -205,7 +237,6 @@ const {
 						log,
 						decodedLog.eventName
 					);
-
 					await processEvent(eventData);
 				}
 			})
@@ -326,19 +357,23 @@ const {
 
 	const startProcessing = async () => {
 		try {
-			await subscribeToAssetStakedEvents();
-			await subscribeToAssetUnstakedEvents();
+			// await subscribeToAssetStakedEvents();
+			// await subscribeToAssetUnstakedEvents();
 
-			await subscribeToAssetLinkEvents();
-			await subscribeToAssetUnlinkEvents();
+			// await subscribeToAssetLinkEvents();
+			// await subscribeToAssetUnlinkEvents();
 
-			await subscribeToAssetLinkV1Events()
+			// await subscribeToAssetLinkV1Events()
 
-			await subscribeToAliStakeEvents();
-			await subscribeToAliWithdrawnEvents();
+			// await subscribeToAliStakeEvents();
+			// await subscribeToAliWithdrawnEvents();
 
-			await subscribeToRootChangedEvents();
-			await subscribeToERC20RewardClaimedEvents();
+			// await subscribeToRootChangedEvents();
+			// await subscribeToERC20RewardClaimedEvents();
+
+			await subscribeToRevTransferEvents();
+			await subscribeToPodTransferEvents();
+
 		} catch (error) {
 			console.error('Fatal error in startProcessing:', error);
 			captureException(error);
