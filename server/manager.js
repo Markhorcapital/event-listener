@@ -4,7 +4,8 @@ const { web3 } = require('../config/web3Instance');
 const {
 	sendEventToSQS,
 	decodeLog,
-	transformSubscriptionEvents
+	transformSubscriptionEvents,
+	sendEventToNftSQS
 } = require('./utils/utils');
 
 (async () => {
@@ -18,7 +19,13 @@ const {
 		TOKEN_WITHDRAWN_TOPIC,
 		REWARD_SYSTEM_CONTRACT,
 		ROOT_CHANGED_TOPIC,
-		ERC20_REWARD_CLAIMED
+		ERC20_REWARD_CLAIMED,
+		INTELLILINKER_ADDRESS,
+		NFT_LINKED_TOPIC,
+		NFT_UNLINKED_TOPIC,
+		NFT_TRANSFER_TOPIC,
+		REVENANTS_ADDRESS,
+		INTELLILINKER_ADDRESS_V1
 	} = Secrets;
 
 	const processEvent = async (event) => {
@@ -31,8 +38,18 @@ const {
 			captureException(err);
 		}
 	};
+	const processNftEvent = async (event) => {
+		try {
+			if (event) {
+				await sendEventToNftSQS(event);
+			}
+		} catch (err) {
+			console.error('Fatal error: Error sending message to SQS:', err);
+			captureException(err);
+		}
+	};
 
-	async function subscribeToAssetLinkEvents() {
+	async function subscribeToAssetStakedEvents() {
 		var subscription = web3.eth
 			.subscribe(
 				'logs',
@@ -55,19 +72,105 @@ const {
 						log,
 						decodedLog.eventName
 					);
-					await processEvent(eventData);
+					await processNftEvent(eventData);
 				}
 			})
 			.on('error', console.error);
 	}
 
-	async function subscribeToAssetUnLinkEvents() {
+	async function subscribeToAssetUnstakedEvents() {
 		var subscription = web3.eth
 			.subscribe(
 				'logs',
 				{
 					address: NFT_STAKING_ADDRESS,
 					topics: [NFT_UNSTAKED_TOPIC]
+				},
+				function (error) {
+					if (error) {
+						console.log(error);
+					}
+				}
+			)
+			.on('data', async function (log) {
+				const decodedLog = await decodeLog(log);
+				if (decodedLog && !decodedLog.error) {
+					const eventData = await transformSubscriptionEvents(
+						decodedLog,
+						log,
+						decodedLog.eventName
+					);
+
+					await processNftEvent(eventData);
+				}
+			})
+			.on('error', console.error);
+	}
+
+	async function subscribeToAssetLinkEvents() {
+		var subscription = web3.eth
+			.subscribe(
+				'logs',
+				{
+					address: INTELLILINKER_ADDRESS,
+					topics: [NFT_LINKED_TOPIC]
+				},
+				function (error) {
+					if (error) {
+						console.log(error);
+					}
+				}
+			)
+			.on('data', async function (log) {
+				const decodedLog = await decodeLog(log);
+				console.log('decodedLog', decodedLog);
+				if (decodedLog && !decodedLog.error) {
+					const eventData = await transformSubscriptionEvents(
+						decodedLog,
+						log,
+						decodedLog.eventName
+					);
+					await processNftEvent(eventData);
+				}
+			})
+			.on('error', console.error);
+	}
+
+	async function subscribeToAssetUnlinkEvents() {
+		var subscription = web3.eth
+			.subscribe(
+				'logs',
+				{
+					address: INTELLILINKER_ADDRESS,
+					topics: [NFT_UNLINKED_TOPIC]
+				},
+				function (error) {
+					if (error) {
+						console.log(error);
+					}
+				}
+			)
+			.on('data', async function (log) {
+				const decodedLog = await decodeLog(log);
+				if (decodedLog && !decodedLog.error) {
+					const eventData = await transformSubscriptionEvents(
+						decodedLog,
+						log,
+						decodedLog.eventName
+					);
+					await processNftEvent(eventData);
+				}
+			})
+			.on('error', console.error);
+	}
+
+	async function subscribeToNftTransferEvents() {
+		var subscription = web3.eth
+			.subscribe(
+				'logs',
+				{
+					address: REVENANTS_ADDRESS,
+					topics: [NFT_TRANSFER_TOPIC]
 				},
 				function (error) {
 					if (error) {
@@ -204,8 +307,11 @@ const {
 
 	const startProcessing = async () => {
 		try {
+			await subscribeToAssetStakedEvents();
+			await subscribeToAssetUnstakedEvents();
+
 			await subscribeToAssetLinkEvents();
-			await subscribeToAssetUnLinkEvents();
+			await subscribeToAssetUnlinkEvents();
 
 			await subscribeToAliStakeEvents();
 			await subscribeToAliWithdrawnEvents();
