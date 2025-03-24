@@ -4,7 +4,8 @@ const { web3 } = require('../config/web3Instance');
 const {
 	sendEventToSQS,
 	decodeLog,
-	transformSubscriptionEvents
+	transformSubscriptionEvents,
+	sendEventToNftSQS
 } = require('./utils/utils');
 
 (async () => {
@@ -38,6 +39,16 @@ const {
 			captureException(err);
 		}
 	};
+	const processNftEvent = async (event) => {
+		try {
+			if (event) {
+				await sendEventToNftSQS(event);
+			}
+		} catch (err) {
+			console.error('Fatal error: Error sending message to SQS:', err);
+			captureException(err);
+		}
+	};
 
 	async function subscribeToAssetStakedEvents() {
 		var subscription = web3.eth
@@ -62,7 +73,7 @@ const {
 						log,
 						decodedLog.eventName
 					);
-					await processEvent(eventData);
+					await processNftEvent(eventData);
 				}
 			})
 			.on('error', console.error);
@@ -91,7 +102,7 @@ const {
 						decodedLog.eventName
 					);
 
-					await processEvent(eventData);
+					await processNftEvent(eventData);
 				}
 			})
 			.on('error', console.error);
@@ -120,36 +131,7 @@ const {
 						log,
 						decodedLog.eventName
 					);
-					await processEvent(eventData);
-				}
-			})
-			.on('error', console.error);
-	}
-
-	async function subscribeToAssetLinkV1Events() {
-		var subscription = web3.eth
-			.subscribe(
-				'logs',
-				{
-					address: INTELLILINKER_ADDRESS_V1,
-					topics: [NFT_LINKED_TOPIC]
-				},
-				function (error) {
-					if (error) {
-						console.log(error);
-					}
-				}
-			)
-			.on('data', async function (log) {
-				const decodedLog = await decodeLog(log);
-				console.log('decodedLog', decodedLog);
-				if (decodedLog && !decodedLog.error) {
-					const eventData = await transformSubscriptionEvents(
-						decodedLog,
-						log,
-						decodedLog.eventName
-					);
-					await processEvent(eventData);
+					await processNftEvent(eventData);
 				}
 			})
 			.on('error', console.error);
@@ -177,8 +159,7 @@ const {
 						log,
 						decodedLog.eventName
 					);
-
-					await processEvent(eventData);
+					await processNftEvent(eventData);
 				}
 			})
 			.on('error', console.error);
@@ -355,19 +336,14 @@ const {
 
 	const startProcessing = async () => {
 		try {
-			// await subscribeToAssetStakedEvents();
-			// await subscribeToAssetUnstakedEvents();
+			await subscribeToAssetStakedEvents();
+			await subscribeToAssetUnstakedEvents();
 
-			// await subscribeToAssetLinkEvents();
-			// await subscribeToAssetUnlinkEvents();
+			await subscribeToAssetLinkEvents();
+			await subscribeToAssetUnlinkEvents();
 
-			// await subscribeToAssetLinkV1Events()
-
-			// await subscribeToAliStakeEvents();
-			// await subscribeToAliWithdrawnEvents();
-
-			// await subscribeToRootChangedEvents();
-			// await subscribeToERC20RewardClaimedEvents();
+			await subscribeToAliStakeEvents();
+			await subscribeToAliWithdrawnEvents();
 
 			await subscribeToRevTransferEvents();
 			await subscribeToPodTransferEvents();

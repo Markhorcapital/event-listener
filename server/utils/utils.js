@@ -13,20 +13,21 @@ const { web3 } = require('../../config/web3Instance');
 const { captureException } = require('@sentry/node');
 
 (async () => {
-	const {
-		AWS_REGION,
-		HIVE_EVENT_HANDLER_SQS,
-		NFT_STAKED_TOPIC,
-		NFT_UNSTAKED_TOPIC,
-		TOKEN_DEPOSITED_TOPIC,
-		TOKEN_WITHDRAWN_TOPIC,
-		ROOT_CHANGED_TOPIC,
-		ERC20_REWARD_CLAIMED,
-		CHAIN_ID,
-		NFT_LINKED_TOPIC,
-		NFT_UNLINKED_TOPIC,
-		NFT_TRANSFER_TOPIC
-	} = Secrets;
+  const {
+    AWS_REGION,
+    HIVE_EVENT_HANDLER_SQS,
+    NFT_STAKED_TOPIC,
+    NFT_UNSTAKED_TOPIC,
+    TOKEN_DEPOSITED_TOPIC,
+    TOKEN_WITHDRAWN_TOPIC,
+    ROOT_CHANGED_TOPIC,
+    ERC20_REWARD_CLAIMED,
+    CHAIN_ID,
+    NFT_LINKED_TOPIC,
+    NFT_UNLINKED_TOPIC,
+	NFT_TRANSFER_TOPIC,
+	NFT_EVENT_HANDLER_SQS
+  } = Secrets;
 
 	const sqs = new SQSClient({ region: AWS_REGION });
 
@@ -53,18 +54,30 @@ const { captureException } = require('@sentry/node');
 		)
 	};
 
-	async function sendEventToSQS(eventData) {
-		// console.log("eventData", JSON.stringify(eventData, null, 2));
-		const params = {
-			MessageBody: JSON.stringify(eventData),
-			QueueUrl: HIVE_EVENT_HANDLER_SQS
-		};
-		await sqs.send(new SendMessageCommand(params));
-		console.log(
-			'data added to HIVE_EVENT_HANDLER_SQS',
-			JSON.stringify(eventData, null, 2)
-		);
-	}
+  async function sendEventToSQS(eventData) {
+    // console.log("eventData", JSON.stringify(eventData, null, 2));
+    const params = {
+      MessageBody: JSON.stringify(eventData),
+      QueueUrl: HIVE_EVENT_HANDLER_SQS,
+    };
+    await sqs.send(new SendMessageCommand(params));
+    console.log(
+      "data added to HIVE_EVENT_HANDLER_SQS",
+      JSON.stringify(eventData, null, 2)
+    );
+  }
+  async function sendEventToNftSQS(eventData) {
+    // console.log("eventData", JSON.stringify(eventData, null, 2));
+    const params = {
+      MessageBody: JSON.stringify(eventData),
+      QueueUrl: NFT_EVENT_HANDLER_SQS,
+    };
+    await sqs.send(new SendMessageCommand(params));
+    console.log(
+      "data added to NFT_EVENT_HANDLER_SQS",
+      JSON.stringify(eventData, null, 2)
+    );
+  }
 
 	// decoding subscription logs
 	async function decodeLog(log) {
@@ -108,13 +121,17 @@ const { captureException } = require('@sentry/node');
 			events: {}
 		};
 
-		switch (eType) {
-			// Handling Staked and Unstaked events
-			case 'Staked':
-			case 'Unstaked': {
-				jsonData = await stakingEventsHandler(decodedEvent, eType, jsonData);
-				break;
-			}
+    switch (eType) {
+      // Handling Staked and Unstaked events
+      case "Staked": {
+        jsonData = await stakingEventsHandler(decodedEvent, eType, jsonData);
+        break;
+      }
+	  
+      case "Unstaked": {
+        jsonData = await stakingEventsHandler(decodedEvent, eType, jsonData);
+        break;
+      }
 
 			// Handling Linked event
 			case 'Linked': {
@@ -428,9 +445,10 @@ const { captureException } = require('@sentry/node');
 		return jsonData;
 	}
 
-	module.exports = {
+  module.exports = {
 		sendEventToSQS,
 		decodeLog,
-		transformSubscriptionEvents
+		transformSubscriptionEvents,
+		sendEventToNftSQS
 	};
 })();
