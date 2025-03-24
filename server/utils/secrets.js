@@ -61,7 +61,9 @@ const ISecrets = {
 	NFT_TRANSFER_TOPIC: null,
 	INTELLILINKER_ADDRESS_V1: null,
 	CHAIN_ID: null,
-	NFT_EVENT_HANDLER_SQS: null
+	NFT_EVENT_HANDLER_SQS: null,
+	NFT_TRANSFER_HANDLER_SQS: null,
+	INTELLIGENTNFT_V2: null
 };
 
 class Secrets {

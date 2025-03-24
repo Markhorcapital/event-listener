@@ -25,8 +25,9 @@ const { captureException } = require('@sentry/node');
     CHAIN_ID,
     NFT_LINKED_TOPIC,
     NFT_UNLINKED_TOPIC,
-	NFT_TRANSFER_TOPIC,
-	NFT_EVENT_HANDLER_SQS
+	TRANSFER_TOPIC,
+	NFT_EVENT_HANDLER_SQS,
+	NFT_TRANSFER_HANDLER_SQS
   } = Secrets;
 
 	const sqs = new SQSClient({ region: AWS_REGION });
@@ -37,7 +38,7 @@ const { captureException } = require('@sentry/node');
 		[NFT_UNSTAKED_TOPIC]: abi.find((e) => e.name === 'Unstaked'),
 		[NFT_LINKED_TOPIC]: IntelliLinkerAbi.find((e) => e.name === 'Linked'),
 		[NFT_UNLINKED_TOPIC]: IntelliLinkerAbi.find((e) => e.name === 'Unlinked'),
-		[NFT_TRANSFER_TOPIC]: PersonalityPodERC721Abi.find(
+		[TRANSFER_TOPIC]: PersonalityPodERC721Abi.find(
 			(e) => e.name === 'Transfer'
 		),
 		[TOKEN_DEPOSITED_TOPIC]: stakingAbi.find(
@@ -63,6 +64,17 @@ const { captureException } = require('@sentry/node');
     await sqs.send(new SendMessageCommand(params));
     console.log(
       "data added to HIVE_EVENT_HANDLER_SQS",
+      JSON.stringify(eventData, null, 2)
+    );
+  }
+  async function sendEventToTransferSQS(eventData) {
+    const params = {
+      MessageBody: JSON.stringify(eventData),
+      QueueUrl: NFT_TRANSFER_HANDLER_SQS,
+    };
+    await sqs.send(new SendMessageCommand(params));
+    console.log(
+      "data added to NFT_TRANSFER_HANDLER_SQS",
       JSON.stringify(eventData, null, 2)
     );
   }
@@ -449,6 +461,7 @@ const { captureException } = require('@sentry/node');
 		sendEventToSQS,
 		decodeLog,
 		transformSubscriptionEvents,
-		sendEventToNftSQS
+		sendEventToNftSQS,
+		sendEventToTransferSQS
 	};
 })();
