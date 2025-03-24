@@ -5,7 +5,8 @@ const {
 	sendEventToSQS,
 	decodeLog,
 	transformSubscriptionEvents,
-	sendEventToNftSQS
+	sendEventToNftSQS,
+	sendEventToTransferSQS
 } = require('./utils/utils');
 
 (async () => {
@@ -24,14 +25,25 @@ const {
 		NFT_LINKED_TOPIC,
 		NFT_UNLINKED_TOPIC,
 		NFT_TRANSFER_TOPIC,
+		POD_ADDRESS,
 		REVENANTS_ADDRESS,
-		INTELLILINKER_ADDRESS_V1
+		INTELLIGENTNFT_V2
 	} = Secrets;
 
 	const processEvent = async (event) => {
 		try {
 			if (event) {
 				await sendEventToSQS(event);
+			}
+		} catch (err) {
+			console.error('Fatal error: Error sending message to SQS:', err);
+			captureException(err);
+		}
+	};
+	const processTransferEvent = async (event) => {
+		try {
+			if (event) {
+				await sendEventToTransferSQS(event);
 			}
 		} catch (err) {
 			console.error('Fatal error: Error sending message to SQS:', err);
@@ -65,7 +77,6 @@ const {
 			)
 			.on('data', async function (log) {
 				const decodedLog = await decodeLog(log);
-				console.log('decodedLog', decodedLog);
 				if (decodedLog && !decodedLog.error) {
 					const eventData = await transformSubscriptionEvents(
 						decodedLog,
@@ -123,7 +134,6 @@ const {
 			)
 			.on('data', async function (log) {
 				const decodedLog = await decodeLog(log);
-				console.log('decodedLog', decodedLog);
 				if (decodedLog && !decodedLog.error) {
 					const eventData = await transformSubscriptionEvents(
 						decodedLog,
@@ -164,7 +174,7 @@ const {
 			.on('error', console.error);
 	}
 
-	async function subscribeToNftTransferEvents() {
+	async function subscribeToRevTransferEvents() {
 		var subscription = web3.eth
 			.subscribe(
 				'logs',
@@ -188,6 +198,36 @@ const {
 					);
 
 					await processEvent(eventData);
+				}
+			})
+			.on('error', console.error);
+	}
+
+	async function subscribeToPodTransferEvents() {
+		var subscription = web3.eth
+			.subscribe(
+				'logs',
+				{
+					address: POD_ADDRESS,
+					topics: [NFT_TRANSFER_TOPIC]
+				},
+				function (error) {
+					if (error) {
+						console.log(error);
+					}
+				}
+			)
+			.on('data', async function (log) {
+				const decodedLog = await decodeLog(log);
+				if (decodedLog && !decodedLog.error) {
+					const eventData = await transformSubscriptionEvents(
+						decodedLog,
+						log,
+						decodedLog.eventName
+					);
+					if(!(eventData.events.Transfer.to === NFT_STAKING_ADDRESS) && !(eventData.events.Transfer.to === INTELLIGENTNFT_V2)){
+						await processTransferEvent(eventData);
+					} 					
 				}
 			})
 			.on('error', console.error);
@@ -316,8 +356,9 @@ const {
 			await subscribeToAliStakeEvents();
 			await subscribeToAliWithdrawnEvents();
 
-			await subscribeToRootChangedEvents();
-			await subscribeToERC20RewardClaimedEvents();
+			await subscribeToRevTransferEvents();
+			await subscribeToPodTransferEvents();
+
 		} catch (error) {
 			console.error('Fatal error in startProcessing:', error);
 			captureException(error);
