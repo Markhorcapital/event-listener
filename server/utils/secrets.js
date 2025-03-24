@@ -41,7 +41,6 @@ const ISecrets = {
 	POD_ADDRESS: null,
 	REVENANTS_ADDRESS: null,
 	TRANSFER_TOPIC: null,
-	INTELL_NFT_V2: null,
 	ASSET_LINKED_TOPIC: null,
 	ASSET_UNLINKED_TOPIC: null,
 	SENTRY_DSN: null,
