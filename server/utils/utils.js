@@ -11,6 +11,7 @@ const { abi: stakingAbi } = require('../../abi/ERC1363StakingTrackerV1.json');
 const { abi: reward_system_abi } = require('../../abi/RewardSystem.json');
 const { web3 } = require('../../config/web3Instance');
 const { captureException } = require('@sentry/node');
+const fs = require('fs');
 
 (async () => {
   const {
@@ -54,6 +55,7 @@ const { captureException } = require('@sentry/node');
 			(e) => e.name === 'ERC20RewardClaimed'
 		)
 	};
+  const nftSet = new Set();
 
   async function sendEventToSQS(eventData) {
     // console.log("eventData", JSON.stringify(eventData, null, 2));
@@ -102,6 +104,39 @@ const { captureException } = require('@sentry/node');
 			if (log.topics.length - 1 !== indexedInputs.length) {
 				console.log('Skipping log due to abi mismatch');
 				return { error: 'Parameter mismatch' };
+			}
+
+			try {
+				const decodedParameters = await web3.eth.abi.decodeLog(
+					eventAbi.inputs,
+					log.data,
+					log.topics.slice(1)
+				);
+				return {
+					eventName: eventAbi.name,
+					decodedParameters
+				};
+			} catch (error) {
+				console.error('Error decoding log:', error);
+				captureException(error);
+				return { error: 'Error decoding log' };
+			}
+		} else {
+			return { error: 'Unknown event type' };
+		}
+	}
+
+	// decoding subscription logs
+	async function decodeLogForCollection(log) {
+		const eventSignatureHash = log.topics[0];
+		const eventAbi = eventABIMap[eventSignatureHash];
+
+		if (eventAbi) {
+			// Check if the number of topics matches the number of indexed parameters in the ABI
+			const indexedInputs = eventAbi.inputs.filter((input) => input.indexed);
+			if (log.topics.length - 1 !== indexedInputs.length) {
+				// console.log('Skipping log due to abi mismatch');
+				return {};
 			}
 
 			try {
@@ -457,11 +492,111 @@ const { captureException } = require('@sentry/node');
 		return jsonData;
 	}
 
+
+	function loadExistingNFTs(NFT_FILE) {
+		try {
+		  if (fs.existsSync(NFT_FILE)) {
+			const data = fs.readFileSync(NFT_FILE, "utf8");
+			const nfts = JSON.parse(data);
+			nfts.forEach((nft) => {
+			  nftSet.add(`${nft.collectionAddress.toLowerCase()}_${nft.tokenId}`);
+			});
+			return nfts;
+		  }
+		  return [];
+		} catch (err) {
+		  console.error("Error loading NFT file:", err);
+		  return [];
+		}
+	  }
+	  
+	function readData(fileName) {
+		try{
+		if (!fs.existsSync(fileName)) {
+		  // Create the file with default data
+		  const defaultData = [];
+		  fs.writeFileSync(fileName, JSON.stringify(defaultData, null, 4));
+		  console.log(`${fileName} created with default data.`);
+		}
+		// Read and parse the file content
+		const fileContent = fs.readFileSync(fileName, "utf-8");
+		const data = JSON.parse(fileContent);
+		// console.log(data);
+	  
+		return data;
+	    } catch (error){
+			console.log("Error read data from JSON file:", error);
+		} 
+	  }
+	  
+	const saveDataToFile = (collectionAddress, iNftId, tokenId, filePath) => {
+		try {
+		  const key = `${collectionAddress.toLowerCase()}_${tokenId}`;
+		  const existingNFTs = loadExistingNFTs(filePath);
+		  if (nftSet.has(key)) {
+			console.log(`Duplicate detected: ${collectionAddress} - ${tokenId}`);
+			return false;
+		  }
+	  
+		  // Add new NFT
+		  const newNFT = {
+			collectionAddress: collectionAddress.toLowerCase(),
+			iNftId,
+			tokenId,
+			timestamp: new Date().toISOString(),
+		  };
+	  
+		  // Update in-memory set and file
+		  nftSet.add(key);
+		  existingNFTs.push(newNFT);
+	  
+		  // Save to file
+		  fs.writeFileSync(filePath, JSON.stringify(existingNFTs, null, 2));
+		  console.log(`Saved new NFT: ${collectionAddress} - ${tokenId}`);
+		  return true;
+		} catch (error) {
+		  console.log("Error saving data to JSON file:", error);
+		}
+	  };
+
+	  function deleteNFT(tokenId, NFT_FILE) {
+		const key = `${tokenId}`;
+		// Load existing NFTs
+		const nftSet = new Set();
+		let nfts;
+		if (fs.existsSync(NFT_FILE)) {
+			const data = fs.readFileSync(NFT_FILE, 'utf8');
+			nfts = JSON.parse(data);
+			nfts.forEach(nft => {
+				nftSet.add(`${nft.iNftId}`);
+			});
+		}
+		const existingNFTs = nfts;
+		if (!nftSet.has(key)) {
+			console.log(`NFT not found: ${tokenId}`);
+			return false;
+		}
+	
+		// Filter out the NFT to delete
+		const updatedNFTs = existingNFTs.filter(nft => 
+			!(nft.iNftId === tokenId)
+		);
+		// Update in-memory set and file
+		nftSet.delete(key);
+		fs.writeFileSync(NFT_FILE, JSON.stringify(updatedNFTs, null, 2));
+		return true;
+	}
+
+
   module.exports = {
 		sendEventToSQS,
 		decodeLog,
 		transformSubscriptionEvents,
 		sendEventToNftSQS,
-		sendEventToTransferSQS
+		sendEventToTransferSQS,
+		decodeLogForCollection,
+		readData,
+		saveDataToFile,
+		deleteNFT
 	};
 })();
