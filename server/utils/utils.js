@@ -55,7 +55,7 @@ const fs = require('fs');
 			(e) => e.name === 'ERC20RewardClaimed'
 		)
 	};
-  const nftSet = new Set();
+
 
   async function sendEventToSQS(eventData) {
     // console.log("eventData", JSON.stringify(eventData, null, 2));
@@ -532,7 +532,16 @@ const fs = require('fs');
 	const saveDataToFile = (collectionAddress, iNftId, tokenId, filePath) => {
 		try {
 		  const key = `${collectionAddress.toLowerCase()}_${tokenId}`;
-		  const existingNFTs = loadExistingNFTs(filePath);
+		  let nfts;
+		  const nftSet = new Set();
+		  if (fs.existsSync(filePath)) {
+			const data = fs.readFileSync(filePath, "utf8");
+			nfts = JSON.parse(data);
+			nfts.forEach((nft) => {
+			  nftSet.add(`${nft.collectionAddress.toLowerCase()}_${nft.tokenId}`);
+			});
+		  }
+		  const existingNFTs = nfts;
 		  if (nftSet.has(key)) {
 			console.log(`Duplicate detected: ${collectionAddress} - ${tokenId}`);
 			return false;
