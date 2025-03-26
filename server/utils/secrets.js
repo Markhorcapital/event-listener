@@ -38,6 +38,9 @@ const ISecrets = {
 	HIVE_EVENT_HANDLER_SQS: null,
 	HIVE_CONTRACT_ADDRESS: null,
 	PORT: null,
+	POD_ADDRESS: null,
+	REVENANTS_ADDRESS: null,
+	TRANSFER_TOPIC: null,
 	ASSET_LINKED_TOPIC: null,
 	ASSET_UNLINKED_TOPIC: null,
 	SENTRY_DSN: null,
@@ -58,7 +61,9 @@ const ISecrets = {
 	NFT_TRANSFER_TOPIC: null,
 	INTELLILINKER_ADDRESS_V1: null,
 	CHAIN_ID: null,
-	NFT_EVENT_HANDLER_SQS: null
+	NFT_EVENT_HANDLER_SQS: null,
+	NFT_TRANSFER_HANDLER_SQS: null,
+	INTELLIGENTNFT_V2: null
 };
 
 class Secrets {
