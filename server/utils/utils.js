@@ -194,7 +194,7 @@ const fs = require('fs');
 
 			// Handling transfer event
 			case 'Transfer': {
-				jsonData = await transferEventsHandler(decodedEvent, eType, jsonData);
+				jsonData = await transferEventsHandler(decodedEvent, eType, jsonData, event);
 				break;
 			}
 
@@ -241,7 +241,8 @@ const fs = require('fs');
 		return jsonData;
 	}
 
-	async function transferEventsHandler(decodedEvent, eType, jsonData) {
+	async function transferEventsHandler(decodedEvent, eType, jsonData,event) {
+		const block = await web3.eth.getBlock(event.blockNumber);
 		// Ensure that all expected fields are present
 		const expectedFields = [
 			'_from',
@@ -261,7 +262,8 @@ const fs = require('fs');
 		jsonData.events[eType] = {
 			from: decodedEvent.decodedParameters._from,
 			to: decodedEvent.decodedParameters._to,
-			tokenId: decodedEvent.decodedParameters._tokenId
+			tokenId: decodedEvent.decodedParameters._tokenId,
+			timestamp: block.timestamp.toString() 
 		};
 		return jsonData;
 	}
