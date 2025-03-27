@@ -63,7 +63,8 @@ const ISecrets = {
 	CHAIN_ID: null,
 	NFT_EVENT_HANDLER_SQS: null,
 	NFT_TRANSFER_HANDLER_SQS: null,
-	INTELLIGENTNFT_V2: null
+	INTELLIGENTNFT_V2: null,
+	WEB3_PROVIDER_2: null
 };
 
 class Secrets {
