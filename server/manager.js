@@ -1,6 +1,6 @@
 /** @format */
 const { captureException } = require('@sentry/node');
-const { web3 } = require('../config/web3Instance');
+const { web3,web3_instance } = require('../config/web3Instance');
 const {
 	sendEventToSQS,
 	decodeLog,
@@ -192,7 +192,7 @@ const {
 	}
 
 	async function subscribeToRevTransferEvents() {
-		var subscription = web3.eth
+		var subscription = web3_instance.eth
 			.subscribe(
 				'logs',
 				{
@@ -221,7 +221,7 @@ const {
 	}
 
 	async function subscribeToPodTransferEvents() {
-		var subscription = web3.eth
+		var subscription = web3_instance.eth
 			.subscribe(
 				'logs',
 				{
@@ -251,7 +251,7 @@ const {
 	}
 
 	async function subscribeToCollectionTransferEvents() {
-		var subscription = web3.eth
+		var subscription = web3_instance.eth
 			.subscribe(
 				'logs',
 				{

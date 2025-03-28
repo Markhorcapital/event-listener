@@ -3,12 +3,13 @@ const { captureException } = require('@sentry/node');
 const Web3 = require('web3');
 const { Secrets } = require('../server/utils/secrets');
 let web3;
+let web3_instance;
 let nft_staking_contract;
 let reward_system_contract;
 const { abi } = require('../abi/NFTStakingV2.json');
 const { abi: reward_system_abi } = require('../abi/RewardSystem.json');
 
-const { NFT_STAKING_ADDRESS, REWARD_SYSTEM_CONTRACT, WEB3_PROVIDER } = Secrets;
+const { NFT_STAKING_ADDRESS, REWARD_SYSTEM_CONTRACT, WEB3_PROVIDER, WEB3_PROVIDER_NFT } = Secrets;
 
 // Function to create a new web3 instance and contract
 async function createWeb3Instance(retryCount = 0) {
@@ -21,7 +22,7 @@ async function createWeb3Instance(retryCount = 0) {
 		}
 	});
 
-	provider.on('connect', () => console.log('WebSocket Connected'));
+	provider.on('connect', () => console.log('WebSocket Connected on WEB3_PROVIDER'));
 	provider.on('end', () => {
 		console.log('WebSocket disconnected! Attempting to reconnect...');
 		const delay = calculateBackoffDelay(retryCount);
@@ -41,6 +42,31 @@ async function createWeb3Instance(retryCount = 0) {
 	);
 }
 
+
+// Function to create a new web3 instance and contract
+async function createWeb3InstanceForTransfer(retryCount = 0) {
+	const provider = new Web3.providers.WebsocketProvider(WEB3_PROVIDER_NFT, {
+		reconnect: {
+			auto: true,
+			delay: 5000, // ms
+			maxAttempts: 5,
+			onTimeout: false
+		}
+	});
+
+	provider.on('connect', () => console.log('WebSocket Connected on WEB3_PROVIDER_NFT'));
+	provider.on('end', () => {
+		console.log('WebSocket disconnected! Attempting to reconnect...');
+		const delay = calculateBackoffDelay(retryCount);
+		setTimeout(() => createWeb3InstanceForTransfer(retryCount + 1), delay);
+	});
+	provider.on('error', (e) => {
+		console.error('WebSocket encountered an error:', e);
+		provider.disconnect();
+	});
+
+	web3_instance = new Web3(provider);
+}
 // Function to calculate the backoff delay
 function calculateBackoffDelay(retryCount) {
 	const baseDelay = 5000; // Base delay in milliseconds
@@ -71,10 +97,14 @@ async function getLatestBlockNumber() {
 
 // Initial creation of the web3 instance and nft_staking_contract
 createWeb3Instance();
+createWeb3InstanceForTransfer();
 
 module.exports = {
 	get web3() {
 		return web3;
+	},
+	get web3_instance() {
+		return web3_instance;
 	},
 	get nft_staking_contract() {
 		return nft_staking_contract;
