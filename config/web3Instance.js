@@ -9,7 +9,7 @@ let reward_system_contract;
 const { abi } = require('../abi/NFTStakingV2.json');
 const { abi: reward_system_abi } = require('../abi/RewardSystem.json');
 
-const { NFT_STAKING_ADDRESS, REWARD_SYSTEM_CONTRACT, WEB3_PROVIDER, WEB3_PROVIDER_2 } = Secrets;
+const { NFT_STAKING_ADDRESS, REWARD_SYSTEM_CONTRACT, WEB3_PROVIDER, WEB3_PROVIDER_NFT } = Secrets;
 
 // Function to create a new web3 instance and contract
 async function createWeb3Instance(retryCount = 0) {
@@ -45,7 +45,7 @@ async function createWeb3Instance(retryCount = 0) {
 
 // Function to create a new web3 instance and contract
 async function createWeb3InstanceForTransfer(retryCount = 0) {
-	const provider = new Web3.providers.WebsocketProvider(WEB3_PROVIDER_2, {
+	const provider = new Web3.providers.WebsocketProvider(WEB3_PROVIDER_NFT, {
 		reconnect: {
 			auto: true,
 			delay: 5000, // ms
@@ -54,7 +54,7 @@ async function createWeb3InstanceForTransfer(retryCount = 0) {
 		}
 	});
 
-	provider.on('connect', () => console.log('WebSocket Connected on WEB3_PROVIDER_2'));
+	provider.on('connect', () => console.log('WebSocket Connected on WEB3_PROVIDER_NFT'));
 	provider.on('end', () => {
 		console.log('WebSocket disconnected! Attempting to reconnect...');
 		const delay = calculateBackoffDelay(retryCount);
