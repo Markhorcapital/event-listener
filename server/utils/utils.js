@@ -102,41 +102,8 @@ const fs = require('fs');
 			// Check if the number of topics matches the number of indexed parameters in the ABI
 			const indexedInputs = eventAbi.inputs.filter((input) => input.indexed);
 			if (log.topics.length - 1 !== indexedInputs.length) {
-				console.log('Skipping log due to abi mismatch');
-				return { error: 'Parameter mismatch' };
-			}
-
-			try {
-				const decodedParameters = await web3.eth.abi.decodeLog(
-					eventAbi.inputs,
-					log.data,
-					log.topics.slice(1)
-				);
-				return {
-					eventName: eventAbi.name,
-					decodedParameters
-				};
-			} catch (error) {
-				console.error('Error decoding log:', error);
-				captureException(error);
-				return { error: 'Error decoding log' };
-			}
-		} else {
-			return { error: 'Unknown event type' };
-		}
-	}
-
-	// decoding subscription logs
-	async function decodeLogForCollection(log) {
-		const eventSignatureHash = log.topics[0];
-		const eventAbi = eventABIMap[eventSignatureHash];
-
-		if (eventAbi) {
-			// Check if the number of topics matches the number of indexed parameters in the ABI
-			const indexedInputs = eventAbi.inputs.filter((input) => input.indexed);
-			if (log.topics.length - 1 !== indexedInputs.length) {
 				// console.log('Skipping log due to abi mismatch');
-				return {};
+				return { error: 'Parameter mismatch' };
 			}
 
 			try {
@@ -163,6 +130,7 @@ const fs = require('fs');
 		let jsonData = {
 			eventType: eType,
 			contractAddress: event.address,
+			blockNumber: event.blockNumber,
 			chainId: parseInt(CHAIN_ID, 10),
 			transactionHash: event.transactionHash,
 			events: {}
@@ -605,7 +573,6 @@ const fs = require('fs');
 		transformSubscriptionEvents,
 		sendEventToNftSQS,
 		sendEventToTransferSQS,
-		decodeLogForCollection,
 		readData,
 		saveDataToFile,
 		deleteNFT

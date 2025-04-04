@@ -1,13 +1,12 @@
 /** @format */
 const { captureException } = require('@sentry/node');
-const { web3,web3_instance } = require('../config/web3Instance');
+const { web3 } = require('../config/web3Instance');
 const {
 	sendEventToSQS,
 	decodeLog,
 	transformSubscriptionEvents,
 	sendEventToNftSQS,
 	sendEventToTransferSQS,
-	decodeLogForCollection,
 	readData,
 	saveDataToFile,
 	deleteNFT
@@ -35,6 +34,7 @@ const {
 	} = Secrets;
 
 	let FILE_NAME = "nftCollection.json";
+	let lastProcessedBlock = null;
 	const processEvent = async (event) => {
 		try {
 			if (event) {
@@ -65,362 +65,199 @@ const {
 			captureException(err);
 		}
 	};
-
-	async function subscribeToAssetStakedEvents() {
+	
+	async function subscribeToBlockNumber() {
 		var subscription = web3.eth
 			.subscribe(
-				'logs',
-				{
-					address: NFT_STAKING_ADDRESS,
-					topics: [NFT_STAKED_TOPIC]
-				},
+				'newBlockHeaders',
 				function (error) {
 					if (error) {
 						console.log(error);
 					}
 				}
 			)
-			.on('data', async function (log) {
-				const decodedLog = await decodeLog(log);
-				if (decodedLog && !decodedLog.error) {
-					const eventData = await transformSubscriptionEvents(
-						decodedLog,
-						log,
-						decodedLog.eventName
-					);
-					await processNftEvent(eventData);
-				}
+			.on('data', async function (blockHeader) {
+				let blockNumber = blockHeader.number;
+				if (lastProcessedBlock=== null) {
+					lastProcessedBlock = blockNumber - 1;
+				  }
+				  for(let blockNum = lastProcessedBlock + 1; blockNum <= blockNumber; blockNum++) {
+					await processBlock(blockNum);
+					lastProcessedBlock = blockNum;
+				  }
+				
 			})
 			.on('error', console.error);
 	}
 
-	async function subscribeToAssetUnstakedEvents() {
-		var subscription = web3.eth
-			.subscribe(
-				'logs',
-				{
-					address: NFT_STAKING_ADDRESS,
-					topics: [NFT_UNSTAKED_TOPIC]
-				},
-				function (error) {
-					if (error) {
-						console.log(error);
-					}
-				}
-			)
-			.on('data', async function (log) {
-				const decodedLog = await decodeLog(log);
-				if (decodedLog && !decodedLog.error) {
-					const eventData = await transformSubscriptionEvents(
-						decodedLog,
-						log,
-						decodedLog.eventName
-					);
+	async function processBlock(blockNumber) {
+		try {
+		  // Get all logs for the block
+		  const logs = await web3.eth.getPastLogs({
+			fromBlock: blockNumber,
+			toBlock: blockNumber
+		  });
+		  for (const log of logs) {
+			await processLogs(log);
+		  }
+		} catch (error) {
+		  console.error(`Error processing block ${blockNumber}:`, error);
+		}
+	  }
+	  async function processLogs(log) {
+		try {
+		  const eventKey = `${log.topics[0]}-${log.address.toLowerCase()}`;
+		  
+		  switch(eventKey) {
+			case `${TRANSFER_TOPIC}-${POD_ADDRESS.toLowerCase()}`:
+			  await handleTransferEvent(log, [NFT_STAKING_ADDRESS, INTELLIGENTNFT_V2]);
+			  break;
+			  
+			case `${NFT_LINKED_TOPIC}-${INTELLILINKER_ADDRESS.toLowerCase()}`:
+			  await handleNftLinkedEvent(log);
+			  break;
+			  
+			case `${NFT_UNLINKED_TOPIC}-${INTELLILINKER_ADDRESS.toLowerCase()}`:
+			  await handleNftUnLinkedEvent(log);
+			  break;
+			  
+			case `${TRANSFER_TOPIC}-${REVENANTS_ADDRESS.toLowerCase()}`:
+			  await handleTransferEvent(log);
+			  break;
+			  
+			case `${NFT_STAKED_TOPIC}-${NFT_STAKING_ADDRESS.toLowerCase()}`:
+			  await handleNftEvent(log);
+			  break;
+			  
+			case `${NFT_UNSTAKED_TOPIC}-${NFT_STAKING_ADDRESS.toLowerCase()}`:
+			  await handleNftEvent(log);
+			  break;
+			  
+			case `${TOKEN_DEPOSITED_TOPIC}-${ALI_STAKING_ADDRESS.toLowerCase()}`:
+			  await handleGenericEvent(log);
+			  break;
+			  
+			case `${TOKEN_WITHDRAWN_TOPIC}-${ALI_STAKING_ADDRESS.toLowerCase()}`:
+			  await handleGenericEvent(log);
+			  break;
+			  
+			case `${ROOT_CHANGED_TOPIC}-${REWARD_SYSTEM_CONTRACT.toLowerCase()}`:
+			  await handleGenericEvent(log);
+			  break;
+			  
+			case `${ERC20_REWARD_CLAIMED}-${REWARD_SYSTEM_CONTRACT.toLowerCase()}`:
+			  await handleGenericEvent(log);
+			  break;
+			  
+			default:
+			  if (log.topics[0] === TRANSFER_TOPIC) {
+				await handleCollectionTransfer(log);
+			  }
+			  break;
+		  }
+		} catch (error) {
+		  console.error('Event processing error:', error);
+		}
+	  }
+	  
+	  // Helper functions for each event type
+	  async function handleTransferEvent(log, excludeAddresses = []) {
+		const decodedLog = await decodeLog(log);
+		if (decodedLog && !decodedLog.error) {
+		  const eventData = await transformSubscriptionEvents(
+			decodedLog,
+			log,
+			decodedLog.eventName
+		  );
+		  if (!excludeAddresses.includes(eventData.events.Transfer.to)) {
+			await processTransferEvent(eventData);
+		  }
+		}
+	  }
+	  
+	  async function handleNftEvent(log) {
+		const decodedLog = await decodeLog(log);
+		if (decodedLog && !decodedLog.error) {
+		  const eventData = await transformSubscriptionEvents(
+			decodedLog,
+			log,
+			decodedLog.eventName
+		  );
+		  await processNftEvent(eventData);
+		}
+	  }
 
-					await processNftEvent(eventData);
-				}
-			})
-			.on('error', console.error);
-	}
-
-	async function subscribeToAssetLinkEvents() {
-		var subscription = web3.eth
-			.subscribe(
-				'logs',
-				{
-					address: INTELLILINKER_ADDRESS,
-					topics: [NFT_LINKED_TOPIC]
-				},
-				function (error) {
-					if (error) {
-						console.log(error);
-					}
-				}
-			)
-			.on('data', async function (log) {
-				const decodedLog = await decodeLog(log);
-				if (decodedLog && !decodedLog.error) {
-					const eventData = await transformSubscriptionEvents(
-						decodedLog,
-						log,
-						decodedLog.eventName
-					);
-					if(!(eventData.events.Linked.targetContract === REVENANTS_ADDRESS)){
-					saveDataToFile(
-						eventData.events.Linked.targetContract,
-						eventData.events.Linked.iNftId,
-						eventData.events.Linked.targetId,
-						FILE_NAME
-					)}
-					await processNftEvent(eventData);
-				}
-			})
-			.on('error', console.error);
-	}
-
-	async function subscribeToAssetUnlinkEvents() {
-		var subscription = web3.eth
-			.subscribe(
-				'logs',
-				{
-					address: INTELLILINKER_ADDRESS,
-					topics: [NFT_UNLINKED_TOPIC]
-				},
-				function (error) {
-					if (error) {
-						console.log(error);
-					}
-				}
-			)
-			.on('data', async function (log) {
-				const decodedLog = await decodeLog(log);
-				if (decodedLog && !decodedLog.error) {
-					const eventData = await transformSubscriptionEvents(
-						decodedLog,
-						log,
-						decodedLog.eventName
-					);
-					deleteNFT(
-						eventData.events.Unlinked.iNftId,
-					    FILE_NAME
-					)
-					await processNftEvent(eventData);
-					
-				}
-			})
-			.on('error', console.error);
-	}
-
-	async function subscribeToRevTransferEvents() {
-		var subscription = web3_instance.eth
-			.subscribe(
-				'logs',
-				{
-					address: REVENANTS_ADDRESS,
-					topics: [TRANSFER_TOPIC]
-				},
-				function (error) {
-					if (error) {
-						console.log(error);
-					}
-				}
-			)
-			.on('data', async function (log) {
-				const decodedLog = await decodeLog(log);
-				if (decodedLog && !decodedLog.error) {
-					const eventData = await transformSubscriptionEvents(
-						decodedLog,
-						log,
-						decodedLog.eventName
-					);
-
-					await processTransferEvent(eventData);
-				}
-			})
-			.on('error', console.error);
-	}
-
-	async function subscribeToPodTransferEvents() {
-		var subscription = web3_instance.eth
-			.subscribe(
-				'logs',
-				{
-					address: POD_ADDRESS,
-					topics: [TRANSFER_TOPIC]
-				},
-				function (error) {
-					if (error) {
-						console.log(error);
-					}
-				}
-			)
-			.on('data', async function (log) {
-				const decodedLog = await decodeLog(log);
-				if (decodedLog && !decodedLog.error) {
-					const eventData = await transformSubscriptionEvents(
-						decodedLog,
-						log,
-						decodedLog.eventName
-					);
-					if(!(eventData.events.Transfer.to === NFT_STAKING_ADDRESS) && !(eventData.events.Transfer.to === INTELLIGENTNFT_V2)){
-						await processTransferEvent(eventData);
-					} 					
-				}
-			})
-			.on('error', console.error);
-	}
-
-	async function subscribeToCollectionTransferEvents() {
-		var subscription = web3_instance.eth
-			.subscribe(
-				'logs',
-				{
-					topics: [TRANSFER_TOPIC]
-				},
-				function (error) {
-					if (error) {
-						console.log(error);
-					}
-				}
-			)
-			.on('data', async function (log) {
-				const decodedLog = await decodeLogForCollection(log);
-				let existingNFTs = readData(FILE_NAME);
-				 
-				if (decodedLog && !decodedLog.error && Object.keys(decodedLog).length > 0) {
-					const eventData = await transformSubscriptionEvents(
-						decodedLog,
-						log,
-						decodedLog.eventName
-					);
-					let NFTs;
-					if(existingNFTs.length > 0){
-					NFTs = existingNFTs.filter(nft => 
-						(nft.collectionAddress.toLowerCase() === eventData.contractAddress.toLowerCase() && 
-						  nft.tokenId === eventData.events.Transfer.tokenId)
-					);
-					if(NFTs.length > 0){
-						if(!(eventData.events.Transfer.to === NFT_STAKING_ADDRESS) && !(eventData.events.Transfer.to === INTELLIGENTNFT_V2)){
-						await processTransferEvent(eventData);
-						}
-				   } 
-				  }				
-				}
-			})
-			.on('error', console.error);
-	}
-
-	async function subscribeToAliStakeEvents() {
-		var subscription = web3.eth
-			.subscribe(
-				'logs',
-				{
-					address: ALI_STAKING_ADDRESS,
-					topics: [TOKEN_DEPOSITED_TOPIC]
-				},
-				function (error) {
-					if (error) {
-						console.log(error);
-					}
-				}
-			)
-			.on('data', async function (log) {
-				const decodedLog = await decodeLog(log);
-				if (decodedLog && !decodedLog.error) {
-					const eventData = await transformSubscriptionEvents(
-						decodedLog,
-						log,
-						decodedLog.eventName
-					);
-					await processEvent(eventData);
-				}
-			})
-			.on('error', console.error);
-	}
-
-	async function subscribeToAliWithdrawnEvents() {
-		var subscription = web3.eth
-			.subscribe(
-				'logs',
-				{
-					address: ALI_STAKING_ADDRESS,
-					topics: [TOKEN_WITHDRAWN_TOPIC]
-				},
-				function (error) {
-					if (error) {
-						console.log(error);
-					}
-				}
-			)
-			.on('data', async function (log) {
-				const decodedLog = await decodeLog(log);
-				if (decodedLog && !decodedLog.error) {
-					const eventData = await transformSubscriptionEvents(
-						decodedLog,
-						log,
-						decodedLog.eventName
-					);
-					await processEvent(eventData);
-				}
-			})
-			.on('error', console.error);
-	}
-	/// reward system
-	async function subscribeToRootChangedEvents() {
-		var subscription = web3.eth
-			.subscribe(
-				'logs',
-				{
-					address: REWARD_SYSTEM_CONTRACT,
-					topics: [ROOT_CHANGED_TOPIC]
-				},
-				function (error) {
-					if (error) {
-						console.log(error);
-					}
-				}
-			)
-			.on('data', async function (log) {
-				const decodedLog = await decodeLog(log);
-				if (decodedLog && !decodedLog.error) {
-					const eventData = await transformSubscriptionEvents(
-						decodedLog,
-						log,
-						decodedLog.eventName
-					);
-					await processEvent(eventData);
-				}
-			})
-			.on('error', console.error);
-	}
-
-	async function subscribeToERC20RewardClaimedEvents() {
-		var subscription = web3.eth
-			.subscribe(
-				'logs',
-				{
-					address: REWARD_SYSTEM_CONTRACT,
-					topics: [ERC20_REWARD_CLAIMED]
-				},
-				function (error) {
-					if (error) {
-						console.log(error);
-					}
-				}
-			)
-			.on('data', async function (log) {
-				const decodedLog = await decodeLog(log);
-				if (decodedLog && !decodedLog.error) {
-					const eventData = await transformSubscriptionEvents(
-						decodedLog,
-						log,
-						decodedLog.eventName
-					);
-					await processEvent(eventData);
-				}
-			})
-			.on('error', console.error);
-	}
+	  async function handleNftLinkedEvent(log) {
+		const decodedLog = await decodeLog(log);
+		if (decodedLog && !decodedLog.error) {
+		  const eventData = await transformSubscriptionEvents(
+			decodedLog,
+			log,
+			decodedLog.eventName
+		  );
+		  if(!(eventData.events.Linked.targetContract === REVENANTS_ADDRESS)){
+			saveDataToFile(
+				eventData.events.Linked.targetContract,
+				eventData.events.Linked.iNftId,
+				eventData.events.Linked.targetId,
+				FILE_NAME
+			)}
+		  await processNftEvent(eventData);
+		}
+	  }
+	  async function handleNftUnLinkedEvent(log) {
+		const decodedLog = await decodeLog(log);
+		if (decodedLog && !decodedLog.error) {
+		  const eventData = await transformSubscriptionEvents(
+			decodedLog,
+			log,
+			decodedLog.eventName
+		  );
+		  deleteNFT(
+			eventData.events.Unlinked.iNftId,
+			FILE_NAME
+		)
+		  await processNftEvent(eventData);
+		}
+	  }
+	  
+	  async function handleGenericEvent(log) {
+		const decodedLog = await decodeLog(log);
+		if (decodedLog && !decodedLog.error) {
+		  const eventData = await transformSubscriptionEvents(
+			decodedLog,
+			log,
+			decodedLog.eventName
+		  );
+		  await processEvent(eventData);
+		}
+	  }
+	  
+	  async function handleCollectionTransfer(log) {
+		const decodedLog = await decodeLog(log);
+		const existingNFTs = readData(FILE_NAME);
+		
+		if (decodedLog && !decodedLog.error && existingNFTs.length > 0) {
+		  const eventData = await transformSubscriptionEvents(
+			decodedLog,
+			log,
+			decodedLog.eventName
+		  );
+		  
+		  const matchingNFTs = existingNFTs.filter(nft => 
+			nft.collectionAddress.toLowerCase() === eventData.contractAddress.toLowerCase() && 
+			nft.tokenId === eventData.events.Transfer.tokenId
+		  );
+		  if (matchingNFTs.length > 0 && 
+			  ![NFT_STAKING_ADDRESS, INTELLIGENTNFT_V2].includes(eventData.events.Transfer.to)) {
+			await processTransferEvent(eventData);
+		  }
+		}
+	  }
 
 	const startProcessing = async () => {
 		try {
-			await subscribeToAssetStakedEvents();
-			await subscribeToAssetUnstakedEvents();
-
-			await subscribeToAssetLinkEvents();
-			await subscribeToAssetUnlinkEvents();
-
-			await subscribeToAliStakeEvents();
-			await subscribeToAliWithdrawnEvents();
-
-			await subscribeToRevTransferEvents();
-			await subscribeToPodTransferEvents();
-
-			await subscribeToERC20RewardClaimedEvents();
-			await subscribeToRootChangedEvents();
-
-			await subscribeToCollectionTransferEvents();
-
+			await subscribeToBlockNumber();
 		} catch (error) {
 			console.error('Fatal error in startProcessing:', error);
 			captureException(error);
