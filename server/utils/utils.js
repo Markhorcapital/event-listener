@@ -130,6 +130,7 @@ const fs = require('fs');
 		let jsonData = {
 			eventType: eType,
 			contractAddress: event.address,
+			blockNumber: event.blockNumber,
 			chainId: parseInt(CHAIN_ID, 10),
 			transactionHash: event.transactionHash,
 			events: {}
