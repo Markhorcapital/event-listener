@@ -64,7 +64,9 @@ const ISecrets = {
 	NFT_EVENT_HANDLER_SQS: null,
 	NFT_TRANSFER_HANDLER_SQS: null,
 	INTELLIGENTNFT_V2: null,
-	WEB3_PROVIDER_NFT: null
+	WEB3_PROVIDER_NFT: null,
+	REDIS_URL: null,
+	LAST_PROCESSED_BLOCK_KEY: null
 };
 
 class Secrets {

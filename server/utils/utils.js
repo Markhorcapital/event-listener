@@ -14,22 +14,22 @@ const { captureException } = require('@sentry/node');
 const fs = require('fs');
 
 (async () => {
-  const {
-    AWS_REGION,
-    HIVE_EVENT_HANDLER_SQS,
-    NFT_STAKED_TOPIC,
-    NFT_UNSTAKED_TOPIC,
-    TOKEN_DEPOSITED_TOPIC,
-    TOKEN_WITHDRAWN_TOPIC,
-    ROOT_CHANGED_TOPIC,
-    ERC20_REWARD_CLAIMED,
-    CHAIN_ID,
-    NFT_LINKED_TOPIC,
-    NFT_UNLINKED_TOPIC,
-	TRANSFER_TOPIC,
-	NFT_EVENT_HANDLER_SQS,
-	NFT_TRANSFER_HANDLER_SQS
-  } = Secrets;
+	const {
+		AWS_REGION,
+		HIVE_EVENT_HANDLER_SQS,
+		NFT_STAKED_TOPIC,
+		NFT_UNSTAKED_TOPIC,
+		TOKEN_DEPOSITED_TOPIC,
+		TOKEN_WITHDRAWN_TOPIC,
+		ROOT_CHANGED_TOPIC,
+		ERC20_REWARD_CLAIMED,
+		CHAIN_ID,
+		NFT_LINKED_TOPIC,
+		NFT_UNLINKED_TOPIC,
+		TRANSFER_TOPIC,
+		NFT_EVENT_HANDLER_SQS,
+		NFT_TRANSFER_HANDLER_SQS
+	} = Secrets;
 
 	const sqs = new SQSClient({ region: AWS_REGION });
 
@@ -57,41 +57,41 @@ const fs = require('fs');
 	};
 
 
-  async function sendEventToSQS(eventData) {
-    // console.log("eventData", JSON.stringify(eventData, null, 2));
-    const params = {
-      MessageBody: JSON.stringify(eventData),
-      QueueUrl: HIVE_EVENT_HANDLER_SQS,
-    };
-    await sqs.send(new SendMessageCommand(params));
-    console.log(
-      "data added to HIVE_EVENT_HANDLER_SQS",
-      JSON.stringify(eventData, null, 2)
-    );
-  }
-  async function sendEventToTransferSQS(eventData) {
-    const params = {
-      MessageBody: JSON.stringify(eventData),
-      QueueUrl: NFT_TRANSFER_HANDLER_SQS,
-    };
-    await sqs.send(new SendMessageCommand(params));
-    console.log(
-      "data added to NFT_TRANSFER_HANDLER_SQS",
-      JSON.stringify(eventData, null, 2)
-    );
-  }
-  async function sendEventToNftSQS(eventData) {
-    // console.log("eventData", JSON.stringify(eventData, null, 2));
-    const params = {
-      MessageBody: JSON.stringify(eventData),
-      QueueUrl: NFT_EVENT_HANDLER_SQS,
-    };
-    await sqs.send(new SendMessageCommand(params));
-    console.log(
-      "data added to NFT_EVENT_HANDLER_SQS",
-      JSON.stringify(eventData, null, 2)
-    );
-  }
+	async function sendEventToSQS(eventData) {
+		// console.log("eventData", JSON.stringify(eventData, null, 2));
+		const params = {
+			MessageBody: JSON.stringify(eventData),
+			QueueUrl: HIVE_EVENT_HANDLER_SQS,
+		};
+		await sqs.send(new SendMessageCommand(params));
+		console.log(
+			"data added to HIVE_EVENT_HANDLER_SQS",
+			JSON.stringify(eventData, null, 2)
+		);
+	}
+	async function sendEventToTransferSQS(eventData) {
+		const params = {
+			MessageBody: JSON.stringify(eventData),
+			QueueUrl: NFT_TRANSFER_HANDLER_SQS,
+		};
+		await sqs.send(new SendMessageCommand(params));
+		console.log(
+			"data added to NFT_TRANSFER_HANDLER_SQS",
+			JSON.stringify(eventData, null, 2)
+		);
+	}
+	async function sendEventToNftSQS(eventData) {
+		// console.log("eventData", JSON.stringify(eventData, null, 2));
+		const params = {
+			MessageBody: JSON.stringify(eventData),
+			QueueUrl: NFT_EVENT_HANDLER_SQS,
+		};
+		await sqs.send(new SendMessageCommand(params));
+		console.log(
+			"data added to NFT_EVENT_HANDLER_SQS",
+			JSON.stringify(eventData, null, 2)
+		);
+	}
 
 	// decoding subscription logs
 	async function decodeLog(log) {
@@ -136,17 +136,17 @@ const fs = require('fs');
 			events: {}
 		};
 
-    switch (eType) {
-      // Handling Staked and Unstaked events
-      case "Staked": {
-        jsonData = await stakingEventsHandler(decodedEvent, eType, jsonData);
-        break;
-      }
-	  
-      case "Unstaked": {
-        jsonData = await stakingEventsHandler(decodedEvent, eType, jsonData);
-        break;
-      }
+		switch (eType) {
+			// Handling Staked and Unstaked events
+			case "Staked": {
+				jsonData = await stakingEventsHandler(decodedEvent, eType, jsonData);
+				break;
+			}
+
+			case "Unstaked": {
+				jsonData = await stakingEventsHandler(decodedEvent, eType, jsonData);
+				break;
+			}
 
 			// Handling Linked event
 			case 'Linked': {
@@ -209,7 +209,7 @@ const fs = require('fs');
 		return jsonData;
 	}
 
-	async function transferEventsHandler(decodedEvent, eType, jsonData,event) {
+	async function transferEventsHandler(decodedEvent, eType, jsonData, event) {
 		const block = await web3.eth.getBlock(event.blockNumber);
 		// Ensure that all expected fields are present
 		const expectedFields = [
@@ -231,7 +231,7 @@ const fs = require('fs');
 			from: decodedEvent.decodedParameters._from,
 			to: decodedEvent.decodedParameters._to,
 			tokenId: decodedEvent.decodedParameters._tokenId,
-			timestamp: block.timestamp.toString() 
+			timestamp: block.timestamp.toString()
 		};
 		return jsonData;
 	}
@@ -465,80 +465,80 @@ const fs = require('fs');
 
 	function loadExistingNFTs(NFT_FILE) {
 		try {
-		  if (fs.existsSync(NFT_FILE)) {
-			const data = fs.readFileSync(NFT_FILE, "utf8");
-			const nfts = JSON.parse(data);
-			nfts.forEach((nft) => {
-			  nftSet.add(`${nft.collectionAddress.toLowerCase()}_${nft.tokenId}`);
-			});
-			return nfts;
-		  }
-		  return [];
+			if (fs.existsSync(NFT_FILE)) {
+				const data = fs.readFileSync(NFT_FILE, "utf8");
+				const nfts = JSON.parse(data);
+				nfts.forEach((nft) => {
+					nftSet.add(`${nft.collectionAddress.toLowerCase()}_${nft.tokenId}`);
+				});
+				return nfts;
+			}
+			return [];
 		} catch (err) {
-		  console.error("Error loading NFT file:", err);
-		  return [];
+			console.error("Error loading NFT file:", err);
+			return [];
 		}
-	  }
-	  
+	}
+
 	function readData(fileName) {
-		try{
-		if (!fs.existsSync(fileName)) {
-		  // Create the file with default data
-		  const defaultData = [];
-		  fs.writeFileSync(fileName, JSON.stringify(defaultData, null, 4));
-		  console.log(`${fileName} created with default data.`);
-		}
-		// Read and parse the file content
-		const fileContent = fs.readFileSync(fileName, "utf-8");
-		const data = JSON.parse(fileContent);
-		// console.log(data);
-	  
-		return data;
-	    } catch (error){
+		try {
+			if (!fs.existsSync(fileName)) {
+				// Create the file with default data
+				const defaultData = [];
+				fs.writeFileSync(fileName, JSON.stringify(defaultData, null, 4));
+				console.log(`${fileName} created with default data.`);
+			}
+			// Read and parse the file content
+			const fileContent = fs.readFileSync(fileName, "utf-8");
+			const data = JSON.parse(fileContent);
+			// console.log(data);
+
+			return data;
+		} catch (error) {
 			console.log("Error read data from JSON file:", error);
-		} 
-	  }
-	  
+		}
+	}
+
 	const saveDataToFile = (collectionAddress, iNftId, tokenId, filePath) => {
 		try {
-		  const key = `${collectionAddress.toLowerCase()}_${tokenId}`;
-		  let nfts;
-		  const nftSet = new Set();
-		  if (fs.existsSync(filePath)) {
-			const data = fs.readFileSync(filePath, "utf8");
-			nfts = JSON.parse(data);
-			nfts.forEach((nft) => {
-			  nftSet.add(`${nft.collectionAddress.toLowerCase()}_${nft.tokenId}`);
-			});
-		  }
-		  const existingNFTs = nfts;
-		  if (nftSet.has(key)) {
-			console.log(`Duplicate detected: ${collectionAddress} - ${tokenId}`);
-			return false;
-		  }
-	  
-		  // Add new NFT
-		  const newNFT = {
-			collectionAddress: collectionAddress.toLowerCase(),
-			iNftId,
-			tokenId,
-			timestamp: new Date().toISOString(),
-		  };
-	  
-		  // Update in-memory set and file
-		  nftSet.add(key);
-		  existingNFTs.push(newNFT);
-	  
-		  // Save to file
-		  fs.writeFileSync(filePath, JSON.stringify(existingNFTs, null, 2));
-		  console.log(`Saved new NFT: ${collectionAddress} - ${tokenId}`);
-		  return true;
-		} catch (error) {
-		  console.log("Error saving data to JSON file:", error);
-		}
-	  };
+			const key = `${collectionAddress.toLowerCase()}_${tokenId}`;
+			let nfts;
+			const nftSet = new Set();
+			if (fs.existsSync(filePath)) {
+				const data = fs.readFileSync(filePath, "utf8");
+				nfts = JSON.parse(data);
+				nfts.forEach((nft) => {
+					nftSet.add(`${nft.collectionAddress.toLowerCase()}_${nft.tokenId}`);
+				});
+			}
+			const existingNFTs = nfts;
+			if (nftSet.has(key)) {
+				console.log(`Duplicate detected: ${collectionAddress} - ${tokenId}`);
+				return false;
+			}
 
-	  function deleteNFT(tokenId, NFT_FILE) {
+			// Add new NFT
+			const newNFT = {
+				collectionAddress: collectionAddress.toLowerCase(),
+				iNftId,
+				tokenId,
+				timestamp: new Date().toISOString(),
+			};
+
+			// Update in-memory set and file
+			nftSet.add(key);
+			existingNFTs.push(newNFT);
+
+			// Save to file
+			fs.writeFileSync(filePath, JSON.stringify(existingNFTs, null, 2));
+			console.log(`Saved new NFT: ${collectionAddress} - ${tokenId}`);
+			return true;
+		} catch (error) {
+			console.log("Error saving data to JSON file:", error);
+		}
+	};
+
+	function deleteNFT(tokenId, NFT_FILE) {
 		const key = `${tokenId}`;
 		// Load existing NFTs
 		const nftSet = new Set();
@@ -555,9 +555,9 @@ const fs = require('fs');
 			console.log(`NFT not found: ${tokenId}`);
 			return false;
 		}
-	
+
 		// Filter out the NFT to delete
-		const updatedNFTs = existingNFTs.filter(nft => 
+		const updatedNFTs = existingNFTs.filter(nft =>
 			!(nft.iNftId === tokenId)
 		);
 		// Update in-memory set and file
@@ -567,7 +567,7 @@ const fs = require('fs');
 	}
 
 
-  module.exports = {
+	module.exports = {
 		sendEventToSQS,
 		decodeLog,
 		transformSubscriptionEvents,

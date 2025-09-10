@@ -123,3 +123,6 @@ dist/
 package-lock.json
 .idea/
 nftCollection.json
+
+
+dump.rdb

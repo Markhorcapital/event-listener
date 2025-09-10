@@ -4,6 +4,7 @@ const { Secrets } = require('./server/utils/secrets');
 const loadSecrets = require('./load_env');
 const express = require('express');
 const Sentry = require('@sentry/node');
+const { closeRedis } = require('./config/redisInstance');
 
 (async () => {
 	await loadSecrets();
@@ -79,5 +80,18 @@ const Sentry = require('@sentry/node');
 
 	app.listen(PORT, () => {
 		console.log(`Express server listening on PORT ${PORT}`);
+	});
+
+	// Graceful shutdown for Redis
+	process.on('SIGINT', async () => {
+		console.log('Shutting down gracefully...');
+		await closeRedis();
+		process.exit(0);
+	});
+
+	process.on('SIGTERM', async () => {
+		console.log('Shutting down gracefully...');
+		await closeRedis();
+		process.exit(0);
 	});
 })();
