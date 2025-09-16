@@ -5,7 +5,7 @@ metadata:
   namespace: _NAMESPACE
 spec:
   serviceName: _APP_NAME-redis
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: _APP_NAME-redis
