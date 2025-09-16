@@ -3,83 +3,199 @@ const { captureException } = require('@sentry/node');
 const { getRedis } = require('../../config/redisInstance');
 const { Secrets } = require('./secrets');
 
-/**
- * Store the last processed block number in Redis
- * @param {number} blockNumber - The block number to store
- * @returns {Promise<boolean>} - Success status
- */
+// 🚀 PRODUCTION REDIS MANAGER - Professional Implementation
+class RedisBlockManager {
+    constructor() {
+        this.chainId = Secrets.CHAIN_ID;
+        this.serviceKey = Secrets.LAST_PROCESSED_BLOCK_KEY;
+        this.retryAttempts = 3;
+        this.retryDelay = 1000; // 1 second
+    }
+
+    // 🔧 PROFESSIONAL: Generate optimized Redis keys
+    getProgressKey() {
+        return `chain:${this.chainId}:progress`;
+    }
+
+    getProcessedKey(blockNumber) {
+        return `chain:${this.chainId}:block:${blockNumber}`;
+    }
+
+    getBatchKey(startBlock, endBlock) {
+        return `chain:${this.chainId}:batch:${startBlock}-${endBlock}`;
+    }
+
+    // 🚀 PROFESSIONAL: Retry logic with exponential backoff
+    async executeWithRetry(operation, context = '') {
+        for (let attempt = 1; attempt <= this.retryAttempts; attempt++) {
+            try {
+                return await operation();
+            } catch (error) {
+                if (attempt === this.retryAttempts) {
+                    console.error(`Redis operation failed after ${this.retryAttempts} attempts [${context}]:`, error.message);
+                    captureException(error);
+                    throw error;
+                }
+
+                const delay = this.retryDelay * Math.pow(2, attempt - 1); // Exponential backoff
+                console.warn(`Redis retry ${attempt}/${this.retryAttempts} [${context}] - waiting ${delay}ms`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+            }
+        }
+    }
+
+    // 🔧 PROFESSIONAL: Atomic progress update with metadata
+    async setLastProcessedBlock(blockNumber) {
+        return this.executeWithRetry(async () => {
+            const redis = getRedis();
+            if (!redis) return false;
+
+            const progressData = {
+                block: blockNumber,
+                chain: this.chainId,
+                updated: Date.now(),
+                service: this.serviceKey
+            };
+
+            await redis.hset(this.getProgressKey(), progressData);
+            return true;
+        }, `setProgress:${blockNumber}`);
+    }
+
+    // 🔧 PROFESSIONAL: Efficient progress retrieval with hash operations
+    async getLastProcessedBlock() {
+        return this.executeWithRetry(async () => {
+            const redis = getRedis();
+            if (!redis) return null;
+
+            const progressData = await redis.hgetall(this.getProgressKey());
+
+            if (!progressData || !progressData.block) {
+                return null;
+            }
+
+            const blockNumber = parseInt(progressData.block, 10);
+            console.log(`📊 Retrieved progress: Block ${blockNumber} (Chain: ${progressData.chain}, Updated: ${new Date(parseInt(progressData.updated)).toISOString()})`);
+
+            return blockNumber;
+        }, 'getProgress');
+    }
+
+    // 🚀 PROFESSIONAL: Batch duplicate checking with pipeline
+    async checkBlocksBatch(blockNumbers) {
+        return this.executeWithRetry(async () => {
+            const redis = getRedis();
+            if (!redis) return blockNumbers.map(() => false);
+
+            const pipeline = redis.pipeline();
+            blockNumbers.forEach(blockNum => {
+                pipeline.exists(this.getProcessedKey(blockNum));
+            });
+
+            const results = await pipeline.exec();
+            return results.map(([err, result]) => err ? false : result === 1);
+        }, `batchCheck:${blockNumbers.length}`);
+    }
+
+    // 🔧 PROFESSIONAL: Efficient single block check
+    async isBlockProcessed(blockNumber) {
+        return this.executeWithRetry(async () => {
+            const redis = getRedis();
+            if (!redis) return false;
+
+            const exists = await redis.exists(this.getProcessedKey(blockNumber));
+            return exists === 1;
+        }, `checkBlock:${blockNumber}`);
+    }
+
+    // 🚀 PROFESSIONAL: Batch marking with pipeline + optimized TTL
+    async markBlocksBatch(blockNumbers) {
+        return this.executeWithRetry(async () => {
+            const redis = getRedis();
+            if (!redis) return false;
+
+            const pipeline = redis.pipeline();
+            const ttl = 86400; // 24 hours
+
+            blockNumbers.forEach(blockNum => {
+                pipeline.setex(this.getProcessedKey(blockNum), ttl, '1');
+            });
+
+            await pipeline.exec();
+            return true;
+        }, `batchMark:${blockNumbers.length}`);
+    }
+
+    // 🔧 PROFESSIONAL: Single block marking
+    async markBlockProcessed(blockNumber) {
+        return this.executeWithRetry(async () => {
+            const redis = getRedis();
+            if (!redis) return false;
+
+            await redis.setex(this.getProcessedKey(blockNumber), 86400, '1');
+            return true;
+        }, `markBlock:${blockNumber}`);
+    }
+
+    // 🚀 PROFESSIONAL: Memory optimization - cleanup old processed blocks
+    async cleanupOldBlocks(currentBlock, keepBlocks = 1000) {
+        return this.executeWithRetry(async () => {
+            const redis = getRedis();
+            if (!redis) return 0;
+
+            const pattern = `chain:${this.chainId}:block:*`;
+            const keys = await redis.keys(pattern);
+
+            const oldKeys = keys.filter(key => {
+                const blockNum = parseInt(key.split(':').pop());
+                return blockNum < currentBlock - keepBlocks;
+            });
+
+            if (oldKeys.length > 0) {
+                await redis.del(...oldKeys);
+                console.log(`🧹 Cleaned up ${oldKeys.length} old block keys`);
+            }
+
+            return oldKeys.length;
+        }, 'cleanup');
+    }
+}
+
+// 🚀 SINGLETON PATTERN - Professional Redis Manager
+const redisManager = new RedisBlockManager();
+
+// 🔧 BACKWARD COMPATIBILITY - Maintain existing function signatures
 async function setLastProcessedBlock(blockNumber) {
-    try {
-        const redis = getRedis();
-        if (!redis) {
-            return false; // Redis not available, fail silently
-        }
-
-        const blockData = {
-            blockNumber: blockNumber,
-            timestamp: new Date().toISOString(),
-            updatedAt: Date.now()
-        };
-
-        const redisKey = `${Secrets.CHAIN_ID}_${Secrets.LAST_PROCESSED_BLOCK_KEY}`;
-        await redis.set(redisKey, JSON.stringify(blockData));
-        return true;
-    } catch (error) {
-        console.error('Error storing last processed block:', error.message);
-        captureException(error);
-        return false;
-    }
+    return redisManager.setLastProcessedBlock(blockNumber);
 }
 
-/**
- * Retrieve the last processed block number from Redis
- * @returns {Promise<number|null>} - The last processed block number or null if not found
- */
 async function getLastProcessedBlock() {
-    try {
-        const redis = getRedis();
-        if (!redis) {
-            return null; // Redis not available
-        }
-
-        const redisKey = `${Secrets.CHAIN_ID}_${Secrets.LAST_PROCESSED_BLOCK_KEY}`;
-        const blockDataString = await redis.get(redisKey);
-
-        if (!blockDataString) {
-            return null;
-        }
-
-        const blockData = JSON.parse(blockDataString);
-        console.log(`Retrieved last processed block: ${blockData.blockNumber} (stored at: ${blockData.timestamp})`);
-
-        return parseInt(blockData.blockNumber, 10);
-    } catch (error) {
-        console.error('Error retrieving last processed block:', error.message);
-        captureException(error);
-        return null;
-    }
+    return redisManager.getLastProcessedBlock();
 }
 
-/**
- * Check if Redis is available and healthy
- * @returns {Promise<boolean>} - Connection status
- */
-async function isRedisHealthy() {
-    try {
-        const redis = getRedis();
-        if (!redis) {
-            return false;
-        }
-
-        await redis.ping();
-        return true;
-    } catch (error) {
-        return false;
-    }
+async function getCurrentLastProcessedBlock() {
+    return redisManager.getLastProcessedBlock();
 }
 
+async function isBlockProcessed(blockNumber) {
+    return redisManager.isBlockProcessed(blockNumber);
+}
+
+async function markBlockProcessed(blockNumber) {
+    return redisManager.markBlockProcessed(blockNumber);
+}
+
+
+// 🚀 PROFESSIONAL: Export both individual functions and manager class
 module.exports = {
+    // Backward compatibility
     setLastProcessedBlock,
     getLastProcessedBlock,
-    isRedisHealthy
+    getCurrentLastProcessedBlock,
+    isBlockProcessed,
+    markBlockProcessed,
+
+    // Professional features
+    redisManager,
+    RedisBlockManager
 };

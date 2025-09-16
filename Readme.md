@@ -1,8 +1,8 @@
-# Event Listener - ALI Staking and NFT Staking
+# Generic Multi-Chain Event Listener
 
 ## Project Overview
 
-This project contains three event listeners for the **ALI Staking** and **NFT Staking (Pods)** and **Reward System** contracts.
+This is a **generic, multi-chain blockchain event listener** that can monitor multiple smart contracts across different chains. The system is designed to be flexible and scalable, allowing you to enable/disable specific contracts through environment configuration.
 
 ### Current Status:
 
@@ -21,6 +21,202 @@ This project contains three event listeners for the **ALI Staking** and **NFT St
 - **ERC20 Staking (ALI Staking):** `0x4b3717169BE7319B0B35a36905C6671262130aa9`
 - **ALI Token (Sepolia):** `0x2722727d9DeB5962f7166E03aE81b1169f784A11`
 - **REWARD_SYSTEM_CONTRACT:** `0xA6EC8541979FC97aA9bEd11798fc562cCA577E87`
+
+## 🔧 Contract Management Guide
+
+### Supported Smart Contracts
+
+The event listener supports the following contract types:
+
+1. **NFT Staking Contract** - Monitors NFT staking/unstaking events
+2. **ALI Staking Contract** - Monitors token deposit/withdrawal events  
+3. **Reward System Contract** - Monitors reward distribution events
+4. **IntelliLinker Contract** - Monitors NFT linking/unlinking events
+5. **POD/Revenants Contracts** - Monitors NFT transfer events
+6. **Linked NFT Collections** - Monitors transfers of linked NFTs
+
+### 🚀 Adding a New Smart Contract
+
+**SUPER SIMPLE!** Just add your contract to the centralized configuration file:
+
+#### 1. Add Contract Configuration (`config/config.js`)
+
+```javascript
+// In CONTRACT_CONFIG array
+{
+    name: 'Your Contract Name',
+    address: () => Secrets.YOUR_CONTRACT_ADDRESS,
+    events: [
+        { 
+            topic: () => Secrets.YOUR_CONTRACT_TOPIC, 
+            eventName: 'YourEventName',
+            abi: YourContractAbi,
+            handler: 'handleYourEvent' 
+        }
+    ]
+}
+```
+
+#### 2. Add ABI Import (`config/config.js`)
+
+```javascript
+// At top of config/config.js
+const { abi: YourContractAbi } = require('../abi/YourContract.json');
+```
+
+#### 3. Add Environment Variables (`server/utils/secrets.js`)
+
+```javascript
+// In ISecrets object (around line 68)
+YOUR_CONTRACT_ADDRESS: null,
+YOUR_CONTRACT_TOPIC: null
+```
+
+#### 4. Add Event Handler (if needed) (`server/utils/utils.js`)
+
+```javascript
+// In getHandlerFunction() handlers object
+handleYourEvent: (log) => handleYourEvent(log),
+
+// Add handler function
+async function handleYourEvent(log) {
+    const decodedLog = await decodeLog(log);
+    if (decodedLog && !decodedLog.error) {
+        const eventData = await transformSubscriptionEvents(
+            decodedLog,
+            log,
+            decodedLog.eventName
+        );
+        await processEvent(eventData); // or processNftEvent/processTransferEvent
+    }
+}
+```
+
+**That's it!** Everything else (event registry, logging, ABI mapping) is **automatically generated** from your configuration.
+
+### 🗑️ Removing a Smart Contract
+
+**EVEN SIMPLER!** Just comment out or remove the contract from `config/config.js`:
+
+```javascript
+// Comment out or delete the entire contract block
+/*
+{
+    name: 'Contract To Remove',
+    address: () => Secrets.CONTRACT_ADDRESS,
+    events: [...]
+}
+*/
+```
+
+**That's it!** The system will automatically:
+- Skip the contract during initialization
+- Not register any event handlers  
+- Continue processing other contracts normally
+
+The event listener gracefully handles missing configurations without crashing.
+
+### 📁 File Structure Overview
+
+```
+HIVE_Listner/
+├── config/
+│   ├── config.js          ← 🎯 MAIN CONFIGURATION FILE
+│   ├── redisInstance.js
+│   └── web3Instance.js
+├── server/
+│   ├── manager.js          ← Main event processing logic
+│   └── utils/
+│       ├── utils.js        ← All utility functions & handlers
+│       └── secrets.js      ← Environment variables
+└── abi/                    ← Contract ABI files
+```
+
+### 🎯 Configuration-Driven Architecture
+
+#### **Single Source of Truth**: `config/config.js`
+- **CONTRACT_CONFIG**: All contract definitions
+- **CHAIN_CONFIG**: Chain-specific settings (batch sizes, delays)
+- **APP_CONFIG**: Application settings (file names, cache size)
+
+#### **Dynamic Generation**:
+- ✅ **Event Registry**: Auto-built from CONTRACT_CONFIG
+- ✅ **ABI Mapping**: Auto-created from contract events
+- ✅ **Logging**: Auto-generated from active contracts
+- ✅ **Chain Optimization**: Auto-selected based on CHAIN_ID
+
+#### **Benefits**:
+- 🎯 **Easy Contract Management**: Add/remove in one file
+- 🚀 **Zero Code Changes**: Configuration drives everything
+- 🔧 **Dynamic Handlers**: Handler functions selected by name
+- 📊 **Chain Optimization**: Automatic batch/delay selection
+
+### 📋 Environment Configuration Examples
+
+#### Full Configuration (All Contracts):
+```bash
+# NFT Staking
+NFT_STAKING_ADDRESS=0xE856B97c2015293814b4bb5a970b3eE507C118cB
+NFT_STAKED_TOPIC=0x7a61b2f6736839b867822dec33e9b62da0725d9d071eac74323a6e04c79223e0
+NFT_UNSTAKED_TOPIC=0x36d8306a3ba641113e235e43a209806d1ed89faf26cf1a0b0406f5bef7da1f8c
+
+# ALI Staking  
+ALI_STAKING_ADDRESS=0x4b3717169BE7319B0B35a36905C6671262130aa9
+TOKEN_DEPOSITED_TOPIC=0xf223d9f62a25e1cc7de0f82802962e811a982b702699cc85222bf17c0422163b
+TOKEN_WITHDRAWN_TOPIC=0x43f48baced8c8f1d748cc1ac8ed7ed56105c833eec2b7ddef9aec537d9593d12
+
+# Reward System
+REWARD_SYSTEM_CONTRACT=0xA6EC8541979FC97aA9bEd11798fc562cCA577E87
+ROOT_CHANGED_TOPIC=0x714dceb37ab5c7fb26ab805d3dc0423f5d90c3dac9f6702a2ea1402ea847851c
+ERC20_REWARD_CLAIMED=0x617dc33bfe6c05895429aa10442ff5716e0040e90d0c04faa92ced6a4d0ae787
+
+# IntelliLinker
+INTELLILINKER_ADDRESS=0x73bB799ceA2a9fFE0e2B65620d3dbeeF6D5e2313
+NFT_LINKED_TOPIC=0x4c5f6243e66f868e375120e87ec9c0e34ad78379d66dca7921055094b6a7eacd
+NFT_UNLINKED_TOPIC=0xdfa02adc9cf1364277c3c57daa66f9e9d90d54e6816235d64c77f3fce73f17be
+
+# Transfer Monitoring
+POD_ADDRESS=0x2F419B18c1ff72391A1648FAf6d6A1714AD72fd4
+REVENANTS_ADDRESS=0xa6335cEcEB86EC0B041c8DCC84Ff9351dE8776aB
+TRANSFER_TOPIC=0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef
+```
+
+#### NFT-Only Configuration:
+```bash
+# Only NFT Staking - other contracts disabled
+NFT_STAKING_ADDRESS=0xE856B97c2015293814b4bb5a970b3eE507C118cB
+NFT_STAKED_TOPIC=0x7a61b2f6736839b867822dec33e9b62da0725d9d071eac74323a6e04c79223e0
+NFT_UNSTAKED_TOPIC=0x36d8306a3ba641113e235e43a209806d1ed89faf26cf1a0b0406f5bef7da1f8c
+
+# Leave others empty or undefined
+# ALI_STAKING_ADDRESS=
+# REWARD_SYSTEM_CONTRACT=
+```
+
+#### Base Chain Configuration:
+```bash
+# Different addresses for Base chain
+CHAIN_ID=8453
+NFT_STAKING_ADDRESS=0x1234... # Base chain address
+NFT_STAKED_TOPIC=0x7a61b2f6736839b867822dec33e9b62da0725d9d071eac74323a6e04c79223e0
+# ... other Base-specific addresses
+```
+
+### 🔍 Startup Logs
+
+When you start the application, you'll see which contracts are active:
+
+```
+=== ACTIVE CONTRACT CONFIGURATION ===
+✅ NFT Staking: 0xE856B97c2015293814b4bb5a970b3eE507C118cB
+✅ ALI Staking: 0x4b3717169BE7319B0B35a36905C6671262130aa9
+✅ Reward System: 0xA6EC8541979FC97aA9bEd11798fc562cCA577E87
+✅ IntelliLinker: 0x73bB799ceA2a9fFE0e2B65620d3dbeeF6D5e2313
+✅ POD Transfers: 0x2F419B18c1ff72391A1648FAf6d6A1714AD72fd4
+✅ Revenants Transfers: 0xa6335cEcEB86EC0B041c8DCC84Ff9351dE8776aB
+✅ Linked NFT Transfer Monitoring: Enabled
+======================================
+```
 
 ## Getting Started
 

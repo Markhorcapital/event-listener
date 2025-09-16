@@ -2,13 +2,6 @@
 
 const { SQSClient, SendMessageCommand } = require('@aws-sdk/client-sqs');
 const { Secrets } = require('../../server/utils/secrets');
-const { abi } = require('../../abi/NFTStakingV2.json');
-const { abi: IntelliLinkerAbi } = require('../../abi/IntelliLinkerV3.json');
-const {
-	abi: PersonalityPodERC721Abi
-} = require('../../abi/PersonalityPodERC721.json');
-const { abi: stakingAbi } = require('../../abi/ERC1363StakingTrackerV1.json');
-const { abi: reward_system_abi } = require('../../abi/RewardSystem.json');
 const { web3 } = require('../../config/web3Instance');
 const { captureException } = require('@sentry/node');
 const fs = require('fs');
@@ -33,32 +26,29 @@ const fs = require('fs');
 
 	const sqs = new SQSClient({ region: AWS_REGION });
 
-	// Create a mapping of event signatures to their ABI entries
-	const eventABIMap = {
-		[NFT_STAKED_TOPIC]: abi.find((e) => e.name === 'Staked'),
-		[NFT_UNSTAKED_TOPIC]: abi.find((e) => e.name === 'Unstaked'),
-		[NFT_LINKED_TOPIC]: IntelliLinkerAbi.find((e) => e.name === 'Linked'),
-		[NFT_UNLINKED_TOPIC]: IntelliLinkerAbi.find((e) => e.name === 'Unlinked'),
-		[TRANSFER_TOPIC]: PersonalityPodERC721Abi.find(
-			(e) => e.name === 'Transfer'
-		),
-		[TOKEN_DEPOSITED_TOPIC]: stakingAbi.find(
-			(e) => e.name === 'TokenDeposited'
-		),
-		[TOKEN_WITHDRAWN_TOPIC]: stakingAbi.find(
-			(e) => e.name === 'TokenWithdrawn'
-		),
-		[ROOT_CHANGED_TOPIC]: reward_system_abi.find(
-			(e) => e.name === 'RootChanged'
-		),
-		[ERC20_REWARD_CLAIMED]: reward_system_abi.find(
-			(e) => e.name === 'ERC20RewardClaimed'
-		)
-	};
+	// Import centralized configuration
+	const { CONTRACT_CONFIG, CHAIN_CONFIG, APP_CONFIG } = require('../../config/config');
+
+	// 🚀 AUTOMATIC ABI MAPPING BUILDER
+	// Builds ABI mappings from CONTRACT_CONFIG automatically
+	const eventABIMap = {};
+
+	function buildABIMapping() {
+		CONTRACT_CONFIG.forEach(contract => {
+			contract.events.forEach(event => {
+				const topic = event.topic();
+				if (topic && event.abi) {
+					eventABIMap[topic] = event.abi.find((e) => e.name === event.eventName);
+				}
+			});
+		});
+	}
+
+	// Build ABI mapping on initialization
+	buildABIMapping();
 
 
 	async function sendEventToSQS(eventData) {
-		// console.log("eventData", JSON.stringify(eventData, null, 2));
 		const params = {
 			MessageBody: JSON.stringify(eventData),
 			QueueUrl: HIVE_EVENT_HANDLER_SQS,
@@ -81,7 +71,6 @@ const fs = require('fs');
 		);
 	}
 	async function sendEventToNftSQS(eventData) {
-		// console.log("eventData", JSON.stringify(eventData, null, 2));
 		const params = {
 			MessageBody: JSON.stringify(eventData),
 			QueueUrl: NFT_EVENT_HANDLER_SQS,
@@ -205,6 +194,9 @@ const fs = require('fs');
 				console.error(`Error: Unsupported event type ${eType}`);
 				return null; // Or handle this case as needed
 		}
+
+		// 📋 LOG ALL TRANSFORMED EVENT DATA
+		console.log("🎯 TRANSFORMED EVENT DATA:", JSON.stringify(jsonData, null, 2));
 
 		return jsonData;
 	}
@@ -363,7 +355,7 @@ const fs = require('fs');
 				createdOn: account.createdOn // Account creation timestamp
 			}
 		};
-		console.log('Transformed data:', JSON.stringify(jsonData, null, 2)); // Log the full data
+		// console.log('Transformed data:', JSON.stringify(jsonData, null, 2)); // Log the full data
 		return jsonData;
 	}
 
@@ -409,7 +401,7 @@ const fs = require('fs');
 				createdOn: account.createdOn // Account creation timestamp
 			}
 		};
-		console.log('Transformed data:', JSON.stringify(jsonData, null, 2)); // Log the full data
+		// console.log('Transformed data:', JSON.stringify(jsonData, null, 2)); // Log the full data
 		return jsonData;
 	}
 
@@ -430,10 +422,10 @@ const fs = require('fs');
 			by: decodedEvent.decodedParameters.by, // Address of the user who changed the root
 			root: decodedEvent.decodedParameters.root // New Merkle root (bytes32)
 		};
-		console.log(
-			'Transformed data for RootChanged:',
-			JSON.stringify(jsonData, null, 2)
-		);
+		// console.log(
+		// 	'Transformed data for RootChanged:',
+		// 	JSON.stringify(jsonData, null, 2)
+		// );
 		return jsonData;
 	}
 
@@ -455,10 +447,10 @@ const fs = require('fs');
 			user: decodedEvent.decodedParameters.user, // Address of the user claiming the reward
 			amount: decodedEvent.decodedParameters.amount.toString() // Claimed reward amount in wei (converted to string)
 		};
-		console.log(
-			'Transformed data for ERC20RewardClaimed:',
-			JSON.stringify(jsonData, null, 2)
-		);
+		// console.log(
+		// 	'Transformed data for ERC20RewardClaimed:',
+		// 	JSON.stringify(jsonData, null, 2)
+		// );
 		return jsonData;
 	}
 
@@ -531,7 +523,7 @@ const fs = require('fs');
 
 			// Save to file
 			fs.writeFileSync(filePath, JSON.stringify(existingNFTs, null, 2));
-			console.log(`Saved new NFT: ${collectionAddress} - ${tokenId}`);
+			// console.log(`Saved new NFT: ${collectionAddress} - ${tokenId}`);
 			return true;
 		} catch (error) {
 			console.log("Error saving data to JSON file:", error);
@@ -567,14 +559,244 @@ const fs = require('fs');
 	}
 
 
+	// ================================================================================================
+	// CONFIGURATION UTILITY FUNCTIONS
+	// ================================================================================================
+
+	// 🔗 CHAIN-SPECIFIC CONFIGURATIONS
+	function getChainBatchSize() {
+		const chainId = parseInt(Secrets.CHAIN_ID);
+		return CHAIN_CONFIG.batchSizes[chainId] || CHAIN_CONFIG.defaults.batchSize;
+	}
+
+	function getChainDelay() {
+		const chainId = parseInt(Secrets.CHAIN_ID);
+		return CHAIN_CONFIG.delays[chainId] || CHAIN_CONFIG.defaults.delay;
+	}
+
+	// 🛡️ STARTUP VALIDATION
+	function validateCriticalDependencies() {
+		const { web3 } = require('../../config/web3Instance');
+
+		// Check Web3 connection
+		if (!web3 || !web3.eth) {
+			throw new Error('FATAL: Web3 connection not available');
+		}
+
+		// Check if at least one contract is configured OR transfer monitoring is enabled
+		const hasContracts = CONTRACT_CONFIG.some(contract => contract.address());
+		if (!hasContracts && !APP_CONFIG.transferMonitoring.enabled()) {
+			console.warn('⚠️  WARNING: No contracts configured and no transfer monitoring enabled');
+			console.warn('⚠️  Event listener will run but process no events');
+		}
+
+		console.log('✅ Critical dependencies validated');
+	}
+
+	// 🚀 AUTOMATIC EVENT REGISTRY BUILDER
+	function buildEventHandlers() {
+		const eventHandlers = new Map();
+		const activeContracts = [];
+
+		CONTRACT_CONFIG.forEach(contract => {
+			const address = contract.address();
+
+			if (address) {
+				let hasActiveEvents = false;
+
+				contract.events.forEach(event => {
+					const topic = event.topic();
+
+					if (topic) {
+						const eventKey = `${topic}-${address.toLowerCase()}`;
+
+						// Get handler function by name
+						const handlerFunction = getHandlerFunction(event.handler, event.excludeAddresses);
+						eventHandlers.set(eventKey, handlerFunction);
+						hasActiveEvents = true;
+					}
+				});
+
+				if (hasActiveEvents) {
+					activeContracts.push({ name: contract.name, address });
+				}
+			}
+		});
+
+		// Auto-generated logging
+		console.log('=== ACTIVE CONTRACT CONFIGURATION ===');
+		activeContracts.forEach(contract => {
+			console.log(`✅ ${contract.name}: ${contract.address}`);
+		});
+		if (APP_CONFIG.transferMonitoring.enabled()) {
+			console.log(`✅ Linked NFT Collections Transfer Monitoring: Enabled (from ${APP_CONFIG.nftCollectionFile})`);
+		}
+		console.log('======================================');
+		console.log(`📋 Event Registry: ${eventHandlers.size} handlers registered`);
+
+		return eventHandlers;
+	}
+
+	// Helper function to get handler functions dynamically
+	function getHandlerFunction(handlerName, excludeAddresses) {
+		const handlers = {
+			handleNftEvent: (log) => handleNftEvent(log),
+			handleGenericEvent: (log) => handleGenericEvent(log),
+			handleNftLinkedEvent: (log) => handleNftLinkedEvent(log),
+			handleNftUnLinkedEvent: (log) => handleNftUnLinkedEvent(log),
+			handleTransferEvent: (log) => handleTransferEvent(log),
+			handleTransferEventWithExclusions: (log) => handleTransferEvent(log, excludeAddresses ? excludeAddresses() : []),
+			handleCollectionTransfer: (log) => handleCollectionTransfer(log)
+		};
+
+		return handlers[handlerName] || handlers.handleGenericEvent;
+	}
+
+	// ================================================================================================
+	// EVENT HANDLER FUNCTIONS
+	// ================================================================================================
+
+	// Helper functions for each event type
+	async function handleTransferEvent(log, excludeAddresses = []) {
+		const decodedLog = await decodeLog(log);
+		if (decodedLog && !decodedLog.error) {
+			const eventData = await transformSubscriptionEvents(
+				decodedLog,
+				log,
+				decodedLog.eventName
+			);
+			if (!excludeAddresses.includes(eventData.events.Transfer.to)) {
+				await processTransferEvent(eventData);
+			}
+		}
+	}
+
+	async function handleNftEvent(log) {
+		const decodedLog = await decodeLog(log);
+		if (decodedLog && !decodedLog.error) {
+			const eventData = await transformSubscriptionEvents(
+				decodedLog,
+				log,
+				decodedLog.eventName
+			);
+			await processNftEvent(eventData);
+		}
+	}
+
+	async function handleNftLinkedEvent(log) {
+		const decodedLog = await decodeLog(log);
+		if (decodedLog && !decodedLog.error) {
+			const eventData = await transformSubscriptionEvents(
+				decodedLog,
+				log,
+				decodedLog.eventName
+			);
+			if (!(eventData.events.Linked.targetContract === Secrets.REVENANTS_ADDRESS)) {
+				saveDataToFile(
+					eventData.events.Linked.targetContract,
+					eventData.events.Linked.iNftId,
+					eventData.events.Linked.targetId,
+					APP_CONFIG.nftCollectionFile
+				)
+			}
+			await processNftEvent(eventData);
+		}
+	}
+
+	async function handleNftUnLinkedEvent(log) {
+		const decodedLog = await decodeLog(log);
+		if (decodedLog && !decodedLog.error) {
+			const eventData = await transformSubscriptionEvents(
+				decodedLog,
+				log,
+				decodedLog.eventName
+			);
+			deleteNFT(
+				eventData.events.Unlinked.iNftId,
+				APP_CONFIG.nftCollectionFile
+			)
+			await processNftEvent(eventData);
+		}
+	}
+
+	async function handleGenericEvent(log) {
+		const decodedLog = await decodeLog(log);
+		if (decodedLog && !decodedLog.error) {
+			const eventData = await transformSubscriptionEvents(
+				decodedLog,
+				log,
+				decodedLog.eventName
+			);
+			await processEvent(eventData);
+		}
+	}
+
+	async function handleCollectionTransfer(log) {
+		const decodedLog = await decodeLog(log);
+		const existingNFTs = readData(APP_CONFIG.nftCollectionFile);
+
+		if (decodedLog && !decodedLog.error && existingNFTs.length > 0) {
+			const eventData = await transformSubscriptionEvents(
+				decodedLog,
+				log,
+				decodedLog.eventName
+			);
+
+			const matchingNFTs = existingNFTs.filter(nft =>
+				nft.collectionAddress.toLowerCase() === eventData.contractAddress.toLowerCase() &&
+				nft.tokenId === eventData.events.Transfer.tokenId
+			);
+			if (matchingNFTs.length > 0 &&
+				![Secrets.NFT_STAKING_ADDRESS, Secrets.INTELLIGENTNFT_V2].filter(Boolean).includes(eventData.events.Transfer.to)) {
+				await processTransferEvent(eventData);
+			}
+		}
+	}
+
+	// ================================================================================================
+	// SQS EVENT PROCESSORS
+	// ================================================================================================
+
+	const processEvent = async (event) => {
+		try {
+			if (event) {
+				await sendEventToSQS(event);
+			}
+		} catch (err) {
+			console.error('Fatal error: Error sending message to SQS:', err);
+			captureException(err);
+		}
+	};
+
+	const processTransferEvent = async (event) => {
+		try {
+			if (event) {
+				await sendEventToTransferSQS(event);
+			}
+		} catch (err) {
+			console.error('Fatal error: Error sending message to SQS:', err);
+			captureException(err);
+		}
+	};
+
+	const processNftEvent = async (event) => {
+		try {
+			if (event) {
+				await sendEventToNftSQS(event);
+			}
+		} catch (err) {
+			console.error('Fatal error: Error sending message to SQS:', err);
+			captureException(err);
+		}
+	};
+
 	module.exports = {
-		sendEventToSQS,
-		decodeLog,
-		transformSubscriptionEvents,
-		sendEventToNftSQS,
-		sendEventToTransferSQS,
-		readData,
-		saveDataToFile,
-		deleteNFT
+		// Configuration Utilities (used by manager.js)
+		getChainBatchSize,
+		getChainDelay,
+		validateCriticalDependencies,
+		buildEventHandlers,
+		handleCollectionTransfer,
+		APP_CONFIG
 	};
 })();

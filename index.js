@@ -30,10 +30,6 @@ const { closeRedis } = require('./config/redisInstance');
 		tracesSampleRate: 1.0 // Capture 100% of the transactions, reduce in production!,
 	});
 
-	// Define the /debug-sentry route first
-	app.get('/debug-sentry', function mainHandler(req, res) {
-		throw new Error('My first Sentry error!');
-	});
 
 	// Custom middleware to log API caller data in case of errors
 	app.use((err, req, res, next) => {
@@ -57,14 +53,28 @@ const { closeRedis } = require('./config/redisInstance');
 		try {
 			await startProcessing();
 		} catch (error) {
-			console.error(`Error in manager.js: ${error}`);
+			console.error(`FATAL ERROR in manager.js: ${error}`);
+			Sentry.captureException(error);
+			// Exit process to prevent zombie state - PM2 will restart
+			process.exit(1);
 		}
 	}
-	app.get(`/health`, (_req, res) => res.send());
-	// Start the application
+
+	// Enhanced health check endpoint
+	app.get(`/health`, (_req, res) => {
+		res.json({
+			status: 'healthy',
+			timestamp: new Date().toISOString(),
+			uptime: process.uptime()
+		});
+	});
+
+	// Start the application with proper error handling
 	startManager().catch((error) => {
-		console.error(`Failed to start the application: ${error}`);
-		// Consider notifying the maintenance team or triggering a failover here
+		console.error(`FATAL: Failed to start the application: ${error}`);
+		Sentry.captureException(error);
+		// Exit process to prevent zombie state - PM2 will restart
+		process.exit(1);
 	});
 
 	// The error handler must be registered after the custom error logging middleware and after all controllers
