@@ -12,7 +12,7 @@ env:
   NAMESPACE: stg                        # set this to the name of the k8s namespace
   CLUSTER_NAME: aliagents-stg           # set this to the name of the EKS cluster
   IMAGE_TAG: ${{ github.sha }}          # set this to your image tag
-  SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL_STAGE }}
+  SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 permissions:
   contents: read
   id-token: write
@@ -35,13 +35,13 @@ jobs:
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v3
       with:
-        role-to-assume: ${{ secrets.AWS_IAM_ROLE_STG }}
+        role-to-assume: ${{ secrets.AWS_IAM_ROLE  }}
         aws-region: ${{ env.AWS_REGION }}
 
     - name: Create .env file
       uses: ozaytsev86/create-env-file@v1
       with:
-        ENV_AWS_SECRET_NAME: ${{ secrets.AWS_SECRET_ARN_STG}}
+        ENV_AWS_SECRET_NAME: ${{ secrets.AWS_SECRET_ARN }}
         ENV_AWS_REGION: ${{ env.AWS_REGION }}
     
     - name: Login to Amazon ECR
