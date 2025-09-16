@@ -11,7 +11,9 @@ const {
 	getLastProcessedBlock,
 	getCurrentLastProcessedBlock,
 	isBlockProcessed,
-	markBlockProcessed
+	markBlockProcessed,
+	claimBlockForProcessing,
+	releaseBlockClaim
 } = require('./utils/redisBlockStorage');
 const {
 	getChainBatchSize,
@@ -89,15 +91,22 @@ const {
 		}
 	}
 
-	// 🚀 PRODUCTION: Redis-based small gap filling
+	// 🚀 ATOMIC: Race-condition-free small gap filling
 	async function fillSmallGap(startBlock, endBlock) {
 		console.log(`🔧 Filling small gap: blocks ${startBlock} to ${endBlock}`);
 
 		for (let blockNum = startBlock; blockNum <= endBlock; blockNum++) {
-			// Simple duplicate check (single instance per chain)
+			// Check if already processed (fast check)
 			if (await isBlockProcessed(blockNum)) {
 				console.log(`⏭️ Block ${blockNum} already processed, skipping`);
-				continue; // Already processed
+				continue;
+			}
+
+			// 🚀 ATOMIC CLAIM: Prevent race conditions
+			const claimed = await claimBlockForProcessing(blockNum);
+			if (!claimed) {
+				console.log(`⏭️ Block ${blockNum} already claimed, skipping`);
+				continue;
 			}
 
 			try {
@@ -113,6 +122,9 @@ const {
 			} catch (error) {
 				console.error(`Error filling gap block ${blockNum}:`, error);
 				captureException(error);
+			} finally {
+				// Always release the claim
+				await releaseBlockClaim(blockNum);
 			}
 		}
 	}
@@ -121,11 +133,18 @@ const {
 	// CORE PROCESSING FUNCTIONS
 	// ================================================================================================
 
-	// 🚀 SIMPLIFIED: Redis-based real-time processing (single instance per chain)
+	// 🚀 ATOMIC: Race-condition-free real-time processing
 	async function processNewBlockRealTime(blockNumber) {
-		// Simple duplicate check (single instance per chain)
+		// Check if already processed (fast check)
 		if (await isBlockProcessed(blockNumber)) {
 			console.log(`⏭️ Block ${blockNumber} already processed, skipping`);
+			return;
+		}
+
+		// 🚀 ATOMIC CLAIM: Prevent race conditions
+		const claimed = await claimBlockForProcessing(blockNumber);
+		if (!claimed) {
+			console.log(`⏭️ Block ${blockNumber} already claimed by another process, skipping`);
 			return;
 		}
 
@@ -143,6 +162,9 @@ const {
 		} catch (error) {
 			console.error(`Error processing real-time block ${blockNumber}:`, error);
 			captureException(error);
+		} finally {
+			// Always release the claim
+			await releaseBlockClaim(blockNumber);
 		}
 	}
 
@@ -180,10 +202,19 @@ const {
 
 				// Process batch sequentially to maintain order
 				for (let blockNum = startBlock; blockNum <= endBlock; blockNum++) {
-					// Simple duplicate check (single instance per chain)
+					// Check if already processed (fast check)
 					if (await isBlockProcessed(blockNum)) {
 						console.log(`⏭️ Block ${blockNum} already processed, skipping`);
-						continue; // Already processed
+						lastProcessedBlock = blockNum; // Update local variable for loop
+						continue;
+					}
+
+					// 🚀 ATOMIC CLAIM: Prevent race conditions
+					const claimed = await claimBlockForProcessing(blockNum);
+					if (!claimed) {
+						console.log(`⏭️ Block ${blockNum} already claimed, skipping`);
+						lastProcessedBlock = blockNum; // Update local variable for loop
+						continue;
 					}
 
 					try {
@@ -200,7 +231,10 @@ const {
 					} catch (error) {
 						console.error(`Error processing historical block ${blockNum}:`, error);
 						captureException(error);
-						// Continue with next block
+						lastProcessedBlock = blockNum; // Update local variable for loop
+					} finally {
+						// Always release the claim
+						await releaseBlockClaim(blockNum);
 					}
 				}
 
@@ -246,10 +280,19 @@ const {
 
 				// Process batch sequentially to maintain order
 				for (let blockNum = startBlock; blockNum <= endBlock; blockNum++) {
-					// Simple duplicate check (single instance per chain)
+					// Check if already processed (fast check)
 					if (await isBlockProcessed(blockNum)) {
 						console.log(`⏭️ Block ${blockNum} already processed, skipping`);
-						continue; // Already processed
+						lastProcessedBlock = blockNum; // Update local variable for loop
+						continue;
+					}
+
+					// 🚀 ATOMIC CLAIM: Prevent race conditions
+					const claimed = await claimBlockForProcessing(blockNum);
+					if (!claimed) {
+						console.log(`⏭️ Block ${blockNum} already claimed, skipping`);
+						lastProcessedBlock = blockNum; // Update local variable for loop
+						continue;
 					}
 
 					try {
@@ -266,7 +309,10 @@ const {
 					} catch (error) {
 						console.error(`Error processing historical block ${blockNum}:`, error);
 						captureException(error);
-						// Continue with next block
+						lastProcessedBlock = blockNum; // Update local variable for loop
+					} finally {
+						// Always release the claim
+						await releaseBlockClaim(blockNum);
 					}
 				}
 

@@ -137,6 +137,33 @@ class RedisBlockManager {
         }, `markBlock:${blockNumber}`);
     }
 
+    // 🚀 ATOMIC: Claim block for processing (prevents race conditions)
+    async claimBlockForProcessing(blockNumber) {
+        return this.executeWithRetry(async () => {
+            const redis = getRedis();
+            if (!redis) return true; // Allow processing if Redis unavailable
+
+            const claimKey = `chain:${this.chainId}:claim:${blockNumber}`;
+
+            // Atomic operation: SET only if key doesn't exist (NX) with TTL
+            const result = await redis.set(claimKey, '1', 'EX', 300, 'NX'); // 5 min TTL
+
+            return result === 'OK'; // Returns true if we successfully claimed the block
+        }, `claimBlock:${blockNumber}`);
+    }
+
+    // 🚀 ATOMIC: Release block claim (cleanup)
+    async releaseBlockClaim(blockNumber) {
+        return this.executeWithRetry(async () => {
+            const redis = getRedis();
+            if (!redis) return true;
+
+            const claimKey = `chain:${this.chainId}:claim:${blockNumber}`;
+            await redis.del(claimKey);
+            return true;
+        }, `releaseClaim:${blockNumber}`);
+    }
+
     // 🚀 PROFESSIONAL: Memory optimization - cleanup old processed blocks
     async cleanupOldBlocks(currentBlock, keepBlocks = 1000) {
         return this.executeWithRetry(async () => {
@@ -185,6 +212,13 @@ async function markBlockProcessed(blockNumber) {
     return redisManager.markBlockProcessed(blockNumber);
 }
 
+async function claimBlockForProcessing(blockNumber) {
+    return redisManager.claimBlockForProcessing(blockNumber);
+}
+
+async function releaseBlockClaim(blockNumber) {
+    return redisManager.releaseBlockClaim(blockNumber);
+}
 
 // 🚀 PROFESSIONAL: Export both individual functions and manager class
 module.exports = {
@@ -194,6 +228,10 @@ module.exports = {
     getCurrentLastProcessedBlock,
     isBlockProcessed,
     markBlockProcessed,
+
+    // Race condition prevention
+    claimBlockForProcessing,
+    releaseBlockClaim,
 
     // Professional features
     redisManager,
