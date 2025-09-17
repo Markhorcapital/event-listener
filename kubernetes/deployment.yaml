@@ -15,6 +15,6 @@ spec:
     spec:
       containers:
         - name: _APP_NAME
-          image: _AWS_Account_ID.dkr.ecr.us-east-2.amazonaws.com/_ECR_REPOSITORY:_IMAGE_TAG  # Replace with your Docker image
+          image: _AWS_ACCOUNT_ID.dkr.ecr.us-east-2.amazonaws.com/_ECR_REPOSITORY:_IMAGE_TAG  # Replace with your Docker image
           ports:
             - containerPort: 3001  # Replace with your application's port
