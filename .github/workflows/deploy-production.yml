@@ -6,7 +6,7 @@ on:
 
 env:
   APP_NAME: base-event-listener               # set this to your App Name  (Its should be lowercase)
-  AWS_Account_ID: 182399679246
+  AWS_ACCOUNT_ID: 182399679246
   AWS_REGION: us-east-2                 # set this to your preferred AWS region, e.g. us-west-1
   ECR_REPOSITORY: base-event-listener         # set this to your Amazon ECR repository name
   NAMESPACE: prod                       # set this to the name of the k8s namespace
