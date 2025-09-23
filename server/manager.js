@@ -5,19 +5,24 @@
 // ================================================================================================
 const { captureException } = require('@sentry/node');
 const { web3 } = require('../config/web3Instance');
+const { web3Historical, initHistoricalWeb3 } = require('../config/web3HistoricalInstance');
 const { initRedis } = require('../config/redisInstance');
 const {
 	setLastProcessedBlock,
 	getLastProcessedBlock,
 	getCurrentLastProcessedBlock,
-	isBlockProcessed,
-	markBlockProcessed,
-	claimBlockForProcessing,
-	releaseBlockClaim
+	setRealtimeProcessedBlock,
+	setHistoricalProcessedBlock,
+	getRealtimeProcessedBlock,
+	getHistoricalProcessedBlock,
+	setHistoricalRange,
+	getHistoricalRange,
+	clearHistoricalProcessing
 } = require('./utils/redisBlockStorage');
 const {
 	getChainBatchSize,
 	getChainDelay,
+	getHistoricalDelay,
 	validateCriticalDependencies,
 	buildEventHandlers,
 	handleCollectionTransfer
@@ -29,9 +34,9 @@ const {
 (async () => {
 	const { Secrets } = require('./utils/secrets');
 
-	// 🚀 REDIS-ONLY STATE: Zero memory storage
-	let isProcessingHistorical = false;     // Background processing flag only
+	// 🚀 SIMPLIFIED STATE: Minimal memory usage
 	let eventHandlers = new Map();          // Event handler registry (built once)
+	let isProcessingHistorical = false;    // Background processing flag
 
 	// ================================================================================================
 	// REDIS-BASED UTILITIES (Production Optimized)
@@ -49,300 +54,281 @@ const {
 	}
 
 	// ================================================================================================
-	// INTELLIGENT GAP DETECTION & PROCESSING
+	// SIMPLIFIED BLOCK PROCESSING - NO GAP DETECTION
 	// ================================================================================================
 
-	// 🎯 REDIS-ONLY SMART BLOCK PROCESSING: Handles gaps dynamically
-	async function handleBlockWithGapDetection(newBlockNumber) {
-		// Get current last processed block from Redis (no memory cache)
-		const lastProcessedBlock = await getCurrentLastProcessedBlock();
+	// 🎯 DUAL TRACKING: Process current block + handle gaps with separate tracking
+	async function handleNewBlock(newBlockNumber) {
+		try {
+			// Get real-time processed block from Redis
+			const lastRealtimeBlock = await getRealtimeProcessedBlock();
 
-		if (lastProcessedBlock === null) {
-			// First run - process new block only
-			console.log(`🎯 First run: processing block ${newBlockNumber}`);
-			await processNewBlockRealTime(newBlockNumber);
-			return;
-		}
-
-		const gap = newBlockNumber - lastProcessedBlock - 1;
-
-		if (gap === 0) {
-			// ✅ NO GAP: Process normally
-			console.log(`✅ No gap detected, processing block ${newBlockNumber}`);
-			await processNewBlockRealTime(newBlockNumber);
-		} else if (gap <= 5) {
-			// 🚀 SMALL GAP (1-5 blocks): Fill immediately before processing new block
-			console.log(`🚀 Small gap detected (${gap} blocks), filling immediately`);
-			await fillSmallGap(lastProcessedBlock + 1, newBlockNumber - 1);
-			await processNewBlockRealTime(newBlockNumber);
-		} else {
-			// 🔄 LARGE GAP (6+ blocks): Process new block first, then start background catch-up
-			console.log(`🔄 Large gap detected (${gap} blocks), processing new block first`);
-
-			// 🚨 FIX: Store original lastProcessedBlock BEFORE updating it
-			const originalLastProcessedBlock = lastProcessedBlock;
-
-			await processNewBlockRealTime(newBlockNumber);
-
-			// Start background historical processing if not already running
-			if (!isProcessingHistorical) {
-				processHistoricalBlocksFromBlock(originalLastProcessedBlock);
+			if (lastRealtimeBlock === null) {
+				// First run - process current block only
+				console.log(`🎯 First run: processing block ${newBlockNumber}`);
+				await processCurrentBlock(newBlockNumber);
+				return;
 			}
+
+			const gap = newBlockNumber - lastRealtimeBlock - 1;
+
+			if (gap === 0) {
+				// ✅ NO GAP: Process normally
+				// console.log(`✅ No gap detected, processing block ${newBlockNumber}`);
+				await processCurrentBlock(newBlockNumber);
+			} else if (gap > 0) {
+				// 🚀 GAP DETECTED: Process current block first, then start background catch-up
+				console.log(`🔄 Gap detected (${gap} blocks), processing current block first`);
+
+				// Process current block immediately (real-time priority)
+				await processCurrentBlock(newBlockNumber);
+
+				// Check if historical processing is needed and not already running
+				const historicalRange = await getHistoricalRange();
+				if (!historicalRange && !isProcessingHistorical) {
+					// 🚀 NON-BLOCKING: Start historical processing in background
+					startHistoricalProcessing(lastRealtimeBlock + 1, newBlockNumber - 1)
+						.catch(error => {
+							console.error('Background historical processing error:', error);
+							captureException(error);
+						});
+				} else if (historicalRange && !isProcessingHistorical) {
+					// 🚀 NON-BLOCKING: Resume historical processing in background
+					// console.log(`🔄 Resuming historical processing from Redis state`);
+					const historicalBlock = await getHistoricalProcessedBlock() || historicalRange.startBlock - 1;
+					resumeHistoricalProcessing(historicalBlock + 1, historicalRange.endBlock)
+						.catch(error => {
+							console.error('Background resumed historical processing error:', error);
+							captureException(error);
+						});
+				}
+			}
+
+		} catch (error) {
+			console.error(`Error handling block ${newBlockNumber}:`, error);
+			captureException(error);
 		}
 	}
 
-	// 🚀 ATOMIC: Race-condition-free small gap filling
-	async function fillSmallGap(startBlock, endBlock) {
-		console.log(`🔧 Filling small gap: blocks ${startBlock} to ${endBlock}`);
+	// 🎯 Process current block and update real-time Redis
+	async function processCurrentBlock(blockNumber) {
+		try {
+			await processBlock(blockNumber);
 
-		for (let blockNum = startBlock; blockNum <= endBlock; blockNum++) {
-			// Check if already processed (fast check)
-			if (await isBlockProcessed(blockNum)) {
-				console.log(`⏭️ Block ${blockNum} already processed, skipping`);
-				continue;
+			// Update Redis with real-time block
+			await setRealtimeProcessedBlock(blockNumber);
+
+		} catch (error) {
+			console.error(`Error processing current block ${blockNumber}:`, error);
+			captureException(error);
+		}
+	}
+
+	// 🚀 START: New historical processing with Redis tracking
+	async function startHistoricalProcessing(startBlock, endBlock) {
+		if (isProcessingHistorical) {
+			return; // Already running
+		}
+
+		isProcessingHistorical = true;
+		// console.log(`🔄 Starting historical processing: blocks ${startBlock} to ${endBlock}`);
+
+		try {
+			// Store the range in Redis for restart recovery
+			await setHistoricalRange(startBlock, endBlock);
+
+			await processHistoricalRange(startBlock, endBlock);
+
+		} catch (error) {
+			console.error("Error in historical processing:", error);
+			captureException(error);
+		} finally {
+			isProcessingHistorical = false;
+		}
+	}
+
+	// 🔄 RESUME: Resume historical processing after restart
+	async function resumeHistoricalProcessing(startBlock, endBlock) {
+		if (isProcessingHistorical) {
+			return; // Already running
+		}
+
+		isProcessingHistorical = true;
+		// console.log(`🔄 Resuming historical processing: blocks ${startBlock} to ${endBlock}`);
+
+		try {
+			await processHistoricalRange(startBlock, endBlock);
+
+		} catch (error) {
+			console.error("Error in resumed historical processing:", error);
+			captureException(error);
+		} finally {
+			isProcessingHistorical = false;
+		}
+	}
+
+	// 🔄 CORE: Process historical range with Redis progress tracking
+	async function processHistoricalRange(startBlock, endBlock) {
+		const batchSize = getChainBatchSize();
+
+		// 🚨 CIRCUIT BREAKER: Prevent processing extremely large gaps
+		const totalBlocks = endBlock - startBlock + 1;
+		const MAX_BLOCKS = 50000; // Maximum 50k blocks per session (conservative)
+
+		if (totalBlocks > MAX_BLOCKS) {
+			// console.warn(`🚨 Large gap detected: ${totalBlocks} blocks. Processing first ${MAX_BLOCKS} blocks only.`);
+			endBlock = startBlock + MAX_BLOCKS - 1;
+
+			// Update the range in Redis to reflect the limited processing
+			await setHistoricalRange(startBlock, endBlock);
+		}
+
+		for (let blockNum = startBlock; blockNum <= endBlock; blockNum += batchSize) {
+			const batchEnd = Math.min(blockNum + batchSize - 1, endBlock);
+
+			// console.log(`📦 Processing historical batch: ${blockNum} to ${batchEnd}`);
+
+			// 🚀 OPTIMIZATION: Check real-time progress only once per batch (not per block)
+			const currentRealtimeBlock = await getRealtimeProcessedBlock();
+			if (currentRealtimeBlock && blockNum >= currentRealtimeBlock) {
+				// console.log(`🎯 Historical batch ${blockNum} caught up by real-time (${currentRealtimeBlock}), stopping historical processing`);
+				await clearHistoricalProcessing();
+				return;
 			}
 
-			// 🚀 ATOMIC CLAIM: Prevent race conditions
-			const claimed = await claimBlockForProcessing(blockNum);
-			if (!claimed) {
-				console.log(`⏭️ Block ${blockNum} already claimed, skipping`);
-				continue;
-			}
-
+			// 🚀 OPTIMIZED: Process entire batch in single RPC call
 			try {
-				console.log(`⚡ Gap-fill processing block: ${blockNum}`);
-				await processBlock(blockNum);
+				// Skip if already caught up (check without Redis call)
+				if (currentRealtimeBlock && blockNum >= currentRealtimeBlock) {
+					// console.log(`🎯 Historical batch ${blockNum}-${batchEnd} already processed by real-time, skipping`);
+					continue;
+				}
 
-				// Mark as processed in Redis
-				await markBlockProcessed(blockNum);
+				// Process entire batch with single RPC call
+				await processBatchBlocks(blockNum, batchEnd, true);
 
-				// Update Redis persistence (always update with latest processed block)
-				await updateLastProcessedBlock(blockNum);
+				// Update historical progress in Redis
+				await setHistoricalProcessedBlock(batchEnd);
+
+				// Shorter delay since we're processing more blocks per call
+				await new Promise(resolve => setTimeout(resolve, getHistoricalDelay()));
 
 			} catch (error) {
-				console.error(`Error filling gap block ${blockNum}:`, error);
+				console.error(`Error processing historical batch ${blockNum}-${batchEnd}:`, error);
 				captureException(error);
-			} finally {
-				// Always release the claim
-				await releaseBlockClaim(blockNum);
 			}
+
+			// Delay between batches
+			await new Promise(resolve => setTimeout(resolve, getChainDelay()));
 		}
+
+		console.log(`✅ Historical processing completed: blocks ${startBlock} to ${endBlock}`);
+
+		// Clear historical processing data from Redis
+		await clearHistoricalProcessing();
 	}
+
 
 	// ================================================================================================
 	// CORE PROCESSING FUNCTIONS
 	// ================================================================================================
 
-	// 🚀 ATOMIC: Race-condition-free real-time processing
-	async function processNewBlockRealTime(blockNumber) {
-		// Check if already processed (fast check)
-		if (await isBlockProcessed(blockNumber)) {
-			console.log(`⏭️ Block ${blockNumber} already processed, skipping`);
-			return;
-		}
 
-		// 🚀 ATOMIC CLAIM: Prevent race conditions
-		const claimed = await claimBlockForProcessing(blockNumber);
-		if (!claimed) {
-			console.log(`⏭️ Block ${blockNumber} already claimed by another process, skipping`);
-			return;
-		}
 
+	// 🚀 REAL-TIME: Process single block using real-time Web3 instance
+	async function processBlock(blockNumber, useHistorical = false) {
 		try {
-			console.log(`⚡ REAL-TIME processing block: ${blockNumber}`);
-			await processBlock(blockNumber);
+			const web3Instance = useHistorical ? web3Historical : web3;
+			const logPrefix = useHistorical ? '📜' : '⚡';
 
-			// Mark as processed in Redis
-			await markBlockProcessed(blockNumber);
-
-			// Update Redis persistence (always update with latest processed block)
-			await updateLastProcessedBlock(blockNumber);
-			console.log(`✅ Updated Redis lastProcessedBlock to ${blockNumber}`);
-
-		} catch (error) {
-			console.error(`Error processing real-time block ${blockNumber}:`, error);
-			captureException(error);
-		} finally {
-			// Always release the claim
-			await releaseBlockClaim(blockNumber);
-		}
-	}
-
-	// 🔄 REDIS-ONLY HISTORICAL CATCH-UP PROCESSING (Background, non-blocking)
-	async function processHistoricalBlocks() {
-		if (isProcessingHistorical) {
-			return; // Already running
-		}
-
-		isProcessingHistorical = true;
-
-		try {
-			// Get last processed block from Redis
-			let lastProcessedBlock = await getCurrentLastProcessedBlock();
-			if (lastProcessedBlock === null) {
-				console.log("❌ No last processed block found in Redis, skipping historical processing");
+			if (!web3Instance) {
+				// console.error(`❌ Web3 instance not available (historical: ${useHistorical})`);
 				return;
 			}
 
-			console.log(`🔄 Starting historical catch-up from block ${lastProcessedBlock + 1}`);
-
-			// Process ALL missed blocks sequentially until caught up
-			const batchSize = getChainBatchSize();
-
-			while (lastProcessedBlock < await web3.eth.getBlockNumber() - 1) {
-				const currentBlock = await web3.eth.getBlockNumber();
-				const startBlock = lastProcessedBlock + 1;
-				const endBlock = Math.min(startBlock + batchSize - 1, currentBlock - 1);
-
-				if (startBlock > endBlock) {
-					break; // Caught up
-				}
-
-				console.log(`📦 Processing historical batch: ${startBlock} to ${endBlock}`);
-
-				// Process batch sequentially to maintain order
-				for (let blockNum = startBlock; blockNum <= endBlock; blockNum++) {
-					// Check if already processed (fast check)
-					if (await isBlockProcessed(blockNum)) {
-						console.log(`⏭️ Block ${blockNum} already processed, skipping`);
-						lastProcessedBlock = blockNum; // Update local variable for loop
-						continue;
-					}
-
-					// 🚀 ATOMIC CLAIM: Prevent race conditions
-					const claimed = await claimBlockForProcessing(blockNum);
-					if (!claimed) {
-						console.log(`⏭️ Block ${blockNum} already claimed, skipping`);
-						lastProcessedBlock = blockNum; // Update local variable for loop
-						continue;
-					}
-
-					try {
-						console.log(`📜 Historical processing block: ${blockNum}`);
-						await processBlock(blockNum);
-
-						// Mark as processed in Redis
-						await markBlockProcessed(blockNum);
-
-						// Update Redis persistence (always update with latest processed block)
-						await updateLastProcessedBlock(blockNum);
-						lastProcessedBlock = blockNum; // Update local variable for loop
-
-					} catch (error) {
-						console.error(`Error processing historical block ${blockNum}:`, error);
-						captureException(error);
-						lastProcessedBlock = blockNum; // Update local variable for loop
-					} finally {
-						// Always release the claim
-						await releaseBlockClaim(blockNum);
-					}
-				}
-
-				// Small delay between batches to not overwhelm the RPC
-				await new Promise(resolve => setTimeout(resolve, getChainDelay()));
-			}
-
-			console.log(`✅ Historical catch-up completed. Current lastProcessedBlock: ${lastProcessedBlock}`);
-
-		} catch (error) {
-			console.error("Error in historical processing:", error);
-			captureException(error);
-		} finally {
-			isProcessingHistorical = false;
-		}
-	}
-
-	// 🚨 FIX: New function that processes from a specific starting block
-	async function processHistoricalBlocksFromBlock(startingLastProcessedBlock) {
-		if (isProcessingHistorical) {
-			return; // Already running
-		}
-
-		isProcessingHistorical = true;
-
-		try {
-			console.log(`🔄 Starting historical catch-up from original block ${startingLastProcessedBlock + 1}`);
-
-			// Process ALL missed blocks sequentially until caught up
-			const batchSize = getChainBatchSize();
-			let lastProcessedBlock = startingLastProcessedBlock;
-
-			while (lastProcessedBlock < await web3.eth.getBlockNumber() - 1) {
-				const currentBlock = await web3.eth.getBlockNumber();
-				const startBlock = lastProcessedBlock + 1;
-				const endBlock = Math.min(startBlock + batchSize - 1, currentBlock - 1);
-
-				if (startBlock > endBlock) {
-					break; // Caught up
-				}
-
-				console.log(`📦 Processing historical batch: ${startBlock} to ${endBlock}`);
-
-				// Process batch sequentially to maintain order
-				for (let blockNum = startBlock; blockNum <= endBlock; blockNum++) {
-					// Check if already processed (fast check)
-					if (await isBlockProcessed(blockNum)) {
-						console.log(`⏭️ Block ${blockNum} already processed, skipping`);
-						lastProcessedBlock = blockNum; // Update local variable for loop
-						continue;
-					}
-
-					// 🚀 ATOMIC CLAIM: Prevent race conditions
-					const claimed = await claimBlockForProcessing(blockNum);
-					if (!claimed) {
-						console.log(`⏭️ Block ${blockNum} already claimed, skipping`);
-						lastProcessedBlock = blockNum; // Update local variable for loop
-						continue;
-					}
-
-					try {
-						console.log(`📜 Historical processing block: ${blockNum}`);
-						await processBlock(blockNum);
-
-						// Mark as processed in Redis
-						await markBlockProcessed(blockNum);
-
-						// Update Redis persistence (always update with latest processed block)
-						await updateLastProcessedBlock(blockNum);
-						lastProcessedBlock = blockNum; // Update local variable for loop
-
-					} catch (error) {
-						console.error(`Error processing historical block ${blockNum}:`, error);
-						captureException(error);
-						lastProcessedBlock = blockNum; // Update local variable for loop
-					} finally {
-						// Always release the claim
-						await releaseBlockClaim(blockNum);
-					}
-				}
-
-				// Small delay between batches to not overwhelm the RPC
-				await new Promise(resolve => setTimeout(resolve, getChainDelay()));
-			}
-
-			console.log(`✅ Historical catch-up completed. Current lastProcessedBlock: ${lastProcessedBlock}`);
-
-		} catch (error) {
-			console.error("Error in historical processing:", error);
-			captureException(error);
-		} finally {
-			isProcessingHistorical = false;
-		}
-	}
-
-	// Process individual block
-	async function processBlock(blockNumber) {
-		try {
 			// Get all logs for the block
-			const logs = await web3.eth.getPastLogs({
+			const logs = await web3Instance.eth.getPastLogs({
 				fromBlock: blockNumber,
 				toBlock: blockNumber
 			});
+
+			// console.log(`${logPrefix} Block ${blockNumber}: Found ${logs.length} logs`);
+
 			for (const log of logs) {
 				await processLogs(log);
 			}
 		} catch (error) {
-			console.error(`Error processing block ${blockNumber}:`, error);
+			console.error(`Error processing block ${blockNumber} (historical: ${useHistorical}):`, error);
+			captureException(error);
+		}
+	}
+
+	// 🚀 OPTIMIZED: Process multiple blocks in single RPC call
+	async function processBatchBlocks(startBlock, endBlock, useHistorical = true) {
+		try {
+			const web3Instance = useHistorical ? web3Historical : web3;
+
+			if (!web3Instance) {
+				// console.error(`❌ Web3 instance not available (historical: ${useHistorical})`);
+				return [];
+			}
+
+			const totalBlocks = endBlock - startBlock + 1;
+
+			// Single RPC call for entire batch
+			const startTime = Date.now();
+			const logs = await web3Instance.eth.getPastLogs({
+				fromBlock: startBlock,
+				toBlock: endBlock
+			});
+			const endTime = Date.now();
+
+
+			// 📊 DETAILED LOGGING: Show block-by-block breakdown
+			const blockLogCounts = {};
+			logs.forEach(log => {
+				const blockNum = parseInt(log.blockNumber, 16);
+				blockLogCounts[blockNum] = (blockLogCounts[blockNum] || 0) + 1;
+			});
+			for (let blockNum = startBlock; blockNum <= endBlock; blockNum++) {
+				const logCount = blockLogCounts[blockNum] || 0;
+			}
+
+			// 🚀 MEMORY OPTIMIZATION: Process logs in chunks to prevent memory explosion
+			const CHUNK_SIZE = 1000; // Process 1000 logs at a time
+
+			if (logs.length > CHUNK_SIZE) {
+				// console.log(`📦 🔄 Large batch detected (${logs.length} logs), processing in chunks of ${CHUNK_SIZE}`);
+
+				for (let i = 0; i < logs.length; i += CHUNK_SIZE) {
+					const chunk = logs.slice(i, i + CHUNK_SIZE);
+					for (const log of chunk) {
+						await processLogs(log);
+					}
+
+					// Small delay between chunks to prevent memory buildup
+					if (i + CHUNK_SIZE < logs.length) {
+						await new Promise(resolve => setTimeout(resolve, 10));
+					}
+				}
+			} else {
+				// console.log(`📦 🔄 Processing all ${logs.length} logs from ${totalBlocks} blocks`);
+				for (const log of logs) {
+					await processLogs(log);
+				}
+			}
+
+			return logs;
+		} catch (error) {
+			console.error(`Error processing batch ${startBlock}-${endBlock}:`, error);
+			captureException(error);
+
+			// Fallback: Process individually if batch fails
+			console.log(`🔄 Falling back to individual block processing for ${startBlock}-${endBlock}`);
+			for (let blockNum = startBlock; blockNum <= endBlock; blockNum++) {
+				await processBlock(blockNum, useHistorical);
+			}
+			return [];
 		}
 	}
 
@@ -379,6 +365,9 @@ const {
 		// Initialize Redis (optional, fails silently if not available)
 		await initRedis();
 
+		// Initialize historical Web3 instance
+		initHistoricalWeb3();
+
 		// Try to load last processed block from Redis (no memory storage)
 		const redisLastBlock = await getLastProcessedBlock();
 		if (redisLastBlock !== null) {
@@ -402,18 +391,9 @@ const {
 			.on('data', async function (blockHeader) {
 				try {
 					const blockNumber = blockHeader.number;
-					console.log(`🔥 New Block Mined ${blockNumber}`);
 
-					// Initialize if first run (Redis-based check)
-					const currentLastBlock = await getCurrentLastProcessedBlock();
-					if (currentLastBlock === null) {
-						// First run - initialize Redis with previous block
-						await updateLastProcessedBlock(blockNumber - 1);
-						console.log(`🎯 Initialized Redis with block ${blockNumber - 1}`);
-					}
-
-					// 🎯 INTELLIGENT GAP DETECTION AND PROCESSING
-					await handleBlockWithGapDetection(blockNumber);
+					// 🎯 SIMPLIFIED: Always process current block
+					await handleNewBlock(blockNumber);
 
 				} catch (error) {
 					console.error('FATAL: Error processing block data:', error);

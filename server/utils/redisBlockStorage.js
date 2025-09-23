@@ -12,17 +12,17 @@ class RedisBlockManager {
         this.retryDelay = 1000; // 1 second
     }
 
-    // 🔧 PROFESSIONAL: Generate optimized Redis keys
-    getProgressKey() {
-        return `chain:${this.chainId}:progress`;
+    // 🔧 DUAL TRACKING: Real-time and historical processing
+    getRealtimeProgressKey() {
+        return `realtime_processed_block`;
     }
 
-    getProcessedKey(blockNumber) {
-        return `chain:${this.chainId}:block:${blockNumber}`;
+    getHistoricalProgressKey() {
+        return `historical_processed_block`;
     }
 
-    getBatchKey(startBlock, endBlock) {
-        return `chain:${this.chainId}:batch:${startBlock}-${endBlock}`;
+    getHistoricalRangeKey() {
+        return `historical_range`;
     }
 
     // 🚀 PROFESSIONAL: Retry logic with exponential backoff
@@ -44,8 +44,8 @@ class RedisBlockManager {
         }
     }
 
-    // 🔧 PROFESSIONAL: Atomic progress update with metadata
-    async setLastProcessedBlock(blockNumber) {
+    // 🚀 REAL-TIME: Store real-time processed block
+    async setRealtimeProcessedBlock(blockNumber) {
         return this.executeWithRetry(async () => {
             const redis = getRedis();
             if (!redis) return false;
@@ -54,144 +54,139 @@ class RedisBlockManager {
                 block: blockNumber,
                 chain: this.chainId,
                 updated: Date.now(),
-                service: this.serviceKey
+                service: this.serviceKey,
+                type: 'realtime'
             };
 
-            await redis.hset(this.getProgressKey(), progressData);
+            await redis.hset(this.getRealtimeProgressKey(), progressData);
             return true;
-        }, `setProgress:${blockNumber}`);
+        }, `setRealtimeProgress:${blockNumber}`);
     }
 
-    // 🔧 PROFESSIONAL: Efficient progress retrieval with hash operations
-    async getLastProcessedBlock() {
+    // 🔄 HISTORICAL: Store historical processed block
+    async setHistoricalProcessedBlock(blockNumber) {
+        return this.executeWithRetry(async () => {
+            const redis = getRedis();
+            if (!redis) return false;
+
+            const progressData = {
+                block: blockNumber,
+                chain: this.chainId,
+                updated: Date.now(),
+                service: this.serviceKey,
+                type: 'historical'
+            };
+
+            await redis.hset(this.getHistoricalProgressKey(), progressData);
+            return true;
+        }, `setHistoricalProgress:${blockNumber}`);
+    }
+
+    // 🎯 HISTORICAL RANGE: Store the range being processed
+    async setHistoricalRange(startBlock, endBlock) {
+        return this.executeWithRetry(async () => {
+            const redis = getRedis();
+            if (!redis) return false;
+
+            const rangeData = {
+                startBlock: startBlock,
+                endBlock: endBlock,
+                chain: this.chainId,
+                updated: Date.now(),
+                status: 'processing'
+            };
+
+            await redis.hset(this.getHistoricalRangeKey(), rangeData);
+            console.log(`📝 Stored historical range ${startBlock}-${endBlock} in Redis`);
+            return true;
+        }, `setHistoricalRange:${startBlock}-${endBlock}`);
+    }
+
+    // 🧹 CLEANUP: Clear historical processing when caught up
+    async clearHistoricalProcessing() {
+        return this.executeWithRetry(async () => {
+            const redis = getRedis();
+            if (!redis) return false;
+
+            await redis.del(this.getHistoricalProgressKey());
+            await redis.del(this.getHistoricalRangeKey());
+            console.log(`🧹 Cleared historical processing data`);
+            return true;
+        }, 'clearHistorical');
+    }
+
+    // 🔧 BACKWARD COMPATIBILITY: Use real-time block as main progress
+    async setLastProcessedBlock(blockNumber) {
+        return this.setRealtimeProcessedBlock(blockNumber);
+    }
+
+    // 🚀 GET REAL-TIME: Get last real-time processed block
+    async getRealtimeProcessedBlock() {
         return this.executeWithRetry(async () => {
             const redis = getRedis();
             if (!redis) return null;
 
-            const progressData = await redis.hgetall(this.getProgressKey());
+            const progressData = await redis.hgetall(this.getRealtimeProgressKey());
 
             if (!progressData || !progressData.block) {
                 return null;
             }
 
             const blockNumber = parseInt(progressData.block, 10);
-            console.log(`📊 Retrieved progress: Block ${blockNumber} (Chain: ${progressData.chain}, Updated: ${new Date(parseInt(progressData.updated)).toISOString()})`);
 
             return blockNumber;
-        }, 'getProgress');
+        }, 'getRealtimeProgress');
     }
 
-    // 🚀 PROFESSIONAL: Batch duplicate checking with pipeline
-    async checkBlocksBatch(blockNumbers) {
+    // 🔄 GET HISTORICAL: Get last historical processed block
+    async getHistoricalProcessedBlock() {
         return this.executeWithRetry(async () => {
             const redis = getRedis();
-            if (!redis) return blockNumbers.map(() => false);
+            if (!redis) return null;
 
-            const pipeline = redis.pipeline();
-            blockNumbers.forEach(blockNum => {
-                pipeline.exists(this.getProcessedKey(blockNum));
-            });
+            const progressData = await redis.hgetall(this.getHistoricalProgressKey());
 
-            const results = await pipeline.exec();
-            return results.map(([err, result]) => err ? false : result === 1);
-        }, `batchCheck:${blockNumbers.length}`);
-    }
-
-    // 🔧 PROFESSIONAL: Efficient single block check
-    async isBlockProcessed(blockNumber) {
-        return this.executeWithRetry(async () => {
-            const redis = getRedis();
-            if (!redis) return false;
-
-            const exists = await redis.exists(this.getProcessedKey(blockNumber));
-            return exists === 1;
-        }, `checkBlock:${blockNumber}`);
-    }
-
-    // 🚀 PROFESSIONAL: Batch marking with pipeline + optimized TTL
-    async markBlocksBatch(blockNumbers) {
-        return this.executeWithRetry(async () => {
-            const redis = getRedis();
-            if (!redis) return false;
-
-            const pipeline = redis.pipeline();
-            const ttl = 86400; // 24 hours
-
-            blockNumbers.forEach(blockNum => {
-                pipeline.setex(this.getProcessedKey(blockNum), ttl, '1');
-            });
-
-            await pipeline.exec();
-            return true;
-        }, `batchMark:${blockNumbers.length}`);
-    }
-
-    // 🔧 PROFESSIONAL: Single block marking
-    async markBlockProcessed(blockNumber) {
-        return this.executeWithRetry(async () => {
-            const redis = getRedis();
-            if (!redis) return false;
-
-            await redis.setex(this.getProcessedKey(blockNumber), 86400, '1');
-            return true;
-        }, `markBlock:${blockNumber}`);
-    }
-
-    // 🚀 ATOMIC: Claim block for processing (prevents race conditions)
-    async claimBlockForProcessing(blockNumber) {
-        return this.executeWithRetry(async () => {
-            const redis = getRedis();
-            if (!redis) return true; // Allow processing if Redis unavailable
-
-            const claimKey = `chain:${this.chainId}:claim:${blockNumber}`;
-
-            // Atomic operation: SET only if key doesn't exist (NX) with TTL
-            const result = await redis.set(claimKey, '1', 'EX', 300, 'NX'); // 5 min TTL
-
-            return result === 'OK'; // Returns true if we successfully claimed the block
-        }, `claimBlock:${blockNumber}`);
-    }
-
-    // 🚀 ATOMIC: Release block claim (cleanup)
-    async releaseBlockClaim(blockNumber) {
-        return this.executeWithRetry(async () => {
-            const redis = getRedis();
-            if (!redis) return true;
-
-            const claimKey = `chain:${this.chainId}:claim:${blockNumber}`;
-            await redis.del(claimKey);
-            return true;
-        }, `releaseClaim:${blockNumber}`);
-    }
-
-    // 🚀 PROFESSIONAL: Memory optimization - cleanup old processed blocks
-    async cleanupOldBlocks(currentBlock, keepBlocks = 1000) {
-        return this.executeWithRetry(async () => {
-            const redis = getRedis();
-            if (!redis) return 0;
-
-            const pattern = `chain:${this.chainId}:block:*`;
-            const keys = await redis.keys(pattern);
-
-            const oldKeys = keys.filter(key => {
-                const blockNum = parseInt(key.split(':').pop());
-                return blockNum < currentBlock - keepBlocks;
-            });
-
-            if (oldKeys.length > 0) {
-                await redis.del(...oldKeys);
-                console.log(`🧹 Cleaned up ${oldKeys.length} old block keys`);
+            if (!progressData || !progressData.block) {
+                return null;
             }
 
-            return oldKeys.length;
-        }, 'cleanup');
+            return parseInt(progressData.block, 10);
+        }, 'getHistoricalProgress');
     }
+
+    // 🎯 GET HISTORICAL RANGE: Get current historical processing range
+    async getHistoricalRange() {
+        return this.executeWithRetry(async () => {
+            const redis = getRedis();
+            if (!redis) return null;
+
+            const rangeData = await redis.hgetall(this.getHistoricalRangeKey());
+
+            if (!rangeData || !rangeData.startBlock) {
+                return null;
+            }
+
+            return {
+                startBlock: parseInt(rangeData.startBlock, 10),
+                endBlock: parseInt(rangeData.endBlock, 10),
+                status: rangeData.status
+            };
+        }, 'getHistoricalRange');
+    }
+
+    // 🔧 BACKWARD COMPATIBILITY: Use real-time block as main progress
+    async getLastProcessedBlock() {
+        return this.getRealtimeProcessedBlock();
+    }
+
+    // 🚀 SIMPLIFIED: No need for individual block tracking or claims
+    // We only track the last processed block number
 }
 
 // 🚀 SINGLETON PATTERN - Professional Redis Manager
 const redisManager = new RedisBlockManager();
 
-// 🔧 BACKWARD COMPATIBILITY - Maintain existing function signatures
+// 🔧 DUAL TRACKING: Export all functions
 async function setLastProcessedBlock(blockNumber) {
     return redisManager.setLastProcessedBlock(blockNumber);
 }
@@ -204,36 +199,52 @@ async function getCurrentLastProcessedBlock() {
     return redisManager.getLastProcessedBlock();
 }
 
-async function isBlockProcessed(blockNumber) {
-    return redisManager.isBlockProcessed(blockNumber);
+// New dual tracking functions
+async function setRealtimeProcessedBlock(blockNumber) {
+    return redisManager.setRealtimeProcessedBlock(blockNumber);
 }
 
-async function markBlockProcessed(blockNumber) {
-    return redisManager.markBlockProcessed(blockNumber);
+async function setHistoricalProcessedBlock(blockNumber) {
+    return redisManager.setHistoricalProcessedBlock(blockNumber);
 }
 
-async function claimBlockForProcessing(blockNumber) {
-    return redisManager.claimBlockForProcessing(blockNumber);
+async function getRealtimeProcessedBlock() {
+    return redisManager.getRealtimeProcessedBlock();
 }
 
-async function releaseBlockClaim(blockNumber) {
-    return redisManager.releaseBlockClaim(blockNumber);
+async function getHistoricalProcessedBlock() {
+    return redisManager.getHistoricalProcessedBlock();
 }
 
-// 🚀 PROFESSIONAL: Export both individual functions and manager class
+async function setHistoricalRange(startBlock, endBlock) {
+    return redisManager.setHistoricalRange(startBlock, endBlock);
+}
+
+async function getHistoricalRange() {
+    return redisManager.getHistoricalRange();
+}
+
+async function clearHistoricalProcessing() {
+    return redisManager.clearHistoricalProcessing();
+}
+
+// 🚀 DUAL TRACKING: Export all functions
 module.exports = {
-    // Backward compatibility
+    // Core functionality (backward compatible)
     setLastProcessedBlock,
     getLastProcessedBlock,
     getCurrentLastProcessedBlock,
-    isBlockProcessed,
-    markBlockProcessed,
 
-    // Race condition prevention
-    claimBlockForProcessing,
-    releaseBlockClaim,
+    // Dual tracking functionality
+    setRealtimeProcessedBlock,
+    setHistoricalProcessedBlock,
+    getRealtimeProcessedBlock,
+    getHistoricalProcessedBlock,
+    setHistoricalRange,
+    getHistoricalRange,
+    clearHistoricalProcessing,
 
-    // Professional features
+    // Manager class
     redisManager,
     RedisBlockManager
 };
