@@ -21,7 +21,8 @@ const fs = require('fs');
 		NFT_UNLINKED_TOPIC,
 		TRANSFER_TOPIC,
 		NFT_EVENT_HANDLER_SQS,
-		NFT_TRANSFER_HANDLER_SQS
+		NFT_TRANSFER_HANDLER_SQS,
+		REWARD_SYSTEM_EVENT_HANDLER_SQS
 	} = Secrets;
 
 	const sqs = new SQSClient({ region: AWS_REGION });
@@ -78,6 +79,19 @@ const fs = require('fs');
 		await sqs.send(new SendMessageCommand(params));
 		console.log(
 			"data added to NFT_EVENT_HANDLER_SQS",
+			JSON.stringify(eventData, null, 2)
+		);
+	}
+
+	async function sendEventToRewardSQS(eventData) {
+		console.log("REWARD_SYSTEM_EVENT_HANDLER_SQS", REWARD_SYSTEM_EVENT_HANDLER_SQS)
+		const params = {
+			MessageBody: JSON.stringify(eventData),
+			QueueUrl: REWARD_SYSTEM_EVENT_HANDLER_SQS,
+		};
+		await sqs.send(new SendMessageCommand(params));
+		console.log(
+			"data added to REWARD_SYSTEM_EVENT_HANDLER_SQS",
 			JSON.stringify(eventData, null, 2)
 		);
 	}
@@ -574,6 +588,11 @@ const fs = require('fs');
 		return CHAIN_CONFIG.delays[chainId] || CHAIN_CONFIG.defaults.delay;
 	}
 
+	function getHistoricalDelay() {
+		const chainId = parseInt(Secrets.CHAIN_ID);
+		return CHAIN_CONFIG.historicalDelays[chainId] || CHAIN_CONFIG.defaults.historicalDelay;
+	}
+
 	// 🛡️ STARTUP VALIDATION
 	function validateCriticalDependencies() {
 		const { web3 } = require('../../config/web3Instance');
@@ -590,7 +609,6 @@ const fs = require('fs');
 			console.warn('⚠️  Event listener will run but process no events');
 		}
 
-		console.log('✅ Critical dependencies validated');
 	}
 
 	// 🚀 AUTOMATIC EVENT REGISTRY BUILDER
@@ -642,6 +660,7 @@ const fs = require('fs');
 		const handlers = {
 			handleNftEvent: (log) => handleNftEvent(log),
 			handleGenericEvent: (log) => handleGenericEvent(log),
+			handleRewardEvent: (log) => handleRewardEvent(log),
 			handleNftLinkedEvent: (log) => handleNftLinkedEvent(log),
 			handleNftUnLinkedEvent: (log) => handleNftUnLinkedEvent(log),
 			handleTransferEvent: (log) => handleTransferEvent(log),
@@ -731,6 +750,18 @@ const fs = require('fs');
 		}
 	}
 
+	async function handleRewardEvent(log) {
+		const decodedLog = await decodeLog(log);
+		if (decodedLog && !decodedLog.error) {
+			const eventData = await transformSubscriptionEvents(
+				decodedLog,
+				log,
+				decodedLog.eventName
+			);
+			await processRewardEvent(eventData);
+		}
+	}
+
 	async function handleCollectionTransfer(log) {
 		const decodedLog = await decodeLog(log);
 		const existingNFTs = readData(APP_CONFIG.nftCollectionFile);
@@ -790,10 +821,22 @@ const fs = require('fs');
 		}
 	};
 
+	const processRewardEvent = async (event) => {
+		try {
+			if (event) {
+				await sendEventToRewardSQS(event);
+			}
+		} catch (err) {
+			console.error('Fatal error: Error sending message to SQS:', err);
+			captureException(err);
+		}
+	};
+
 	module.exports = {
 		// Configuration Utilities (used by manager.js)
 		getChainBatchSize,
 		getChainDelay,
+		getHistoricalDelay,
 		validateCriticalDependencies,
 		buildEventHandlers,
 		handleCollectionTransfer,

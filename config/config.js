@@ -65,13 +65,13 @@ const CONTRACT_CONFIG = [
                 topic: () => Secrets.ROOT_CHANGED_TOPIC,
                 eventName: 'RootChanged',
                 abi: reward_system_abi,
-                handler: 'handleGenericEvent'
+                handler: 'handleRewardEvent'
             },
             {
                 topic: () => Secrets.ERC20_REWARD_CLAIMED,
                 eventName: 'ERC20RewardClaimed',
                 abi: reward_system_abi,
-                handler: 'handleGenericEvent'
+                handler: 'handleRewardEvent'
             }
         ]
     },
@@ -127,10 +127,10 @@ const CONTRACT_CONFIG = [
 
 const CHAIN_CONFIG = {
     batchSizes: {
-        1: 3,      // Ethereum (12.04s blocks) - Conservative for expensive RPC
-        137: 15,   // Polygon (2.14s blocks) - Moderate for fast, cheap blocks  
-        8453: 10,  // Base (2s blocks) - Moderate for L2 efficiency
-        25: 25     // Cronos (0.56s blocks) - Aggressive for very fast blocks
+        1: 100,    // Ethereum - Conservative and consistent
+        137: 100,  // Polygon - Conservative and consistent
+        8453: 100, // Base - Conservative and consistent
+        25: 100    // Cronos - Conservative and consistent
     },
     delays: {
         1: 300,    // Ethereum - Longer delay (expensive RPC, slow blocks)
@@ -138,9 +138,17 @@ const CHAIN_CONFIG = {
         8453: 150, // Base - Medium delay (L2, moderate cost)
         25: 50     // Cronos - Short delay (very fast blocks, need to keep up)
     },
+    // Historical processing delays (between individual blocks)
+    historicalDelays: {
+        1: 100,    // Ethereum - Moderate delay for historical
+        137: 25,   // Polygon - Fast historical processing
+        8453: 50,  // Base - Moderate historical processing
+        25: 20     // Cronos - Fast historical processing
+    },
     defaults: {
         batchSize: 5,
-        delay: 150
+        delay: 150,
+        historicalDelay: 50
     }
 };
 

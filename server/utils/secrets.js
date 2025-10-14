@@ -23,6 +23,7 @@
  * @property {string|null} REWARD_SYSTEM_CONTRACT - Address for the reward system contract, initialized as null.
  * @property {string|null} ROOT_CHANGED_TOPIC - Topic for root changed events, initialized as null.
  * @property {string|null} ERC20_REWARD_CLAIMED - Topic for ERC20 reward claimed events, initialized as null.
+ * @property {string|null} REWARD_SYSTEM_EVENT_HANDLER_SQS - SQS URL for reward system events, initialized as null.
  */
 
 /**
@@ -55,6 +56,7 @@ const ISecrets = {
 	REWARD_SYSTEM_CONTRACT: null,
 	ROOT_CHANGED_TOPIC: null,
 	ERC20_REWARD_CLAIMED: null,
+	REWARD_SYSTEM_EVENT_HANDLER_SQS: null,
 	NFT_LINKED_TOPIC: null,
 	NFT_UNLINKED_TOPIC: null,
 	INTELLILINKER_ADDRESS: null,
@@ -65,6 +67,7 @@ const ISecrets = {
 	NFT_TRANSFER_HANDLER_SQS: null,
 	INTELLIGENTNFT_V2: null,
 	WEB3_PROVIDER_NFT: null,
+	WEB3_PROVIDER_HISTORICAL: null,
 	REDIS_URL: null,
 	LAST_PROCESSED_BLOCK_KEY: null
 };

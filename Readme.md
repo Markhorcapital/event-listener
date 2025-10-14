@@ -7,29 +7,94 @@ This is a **multi-chain blockchain event listener** that monitors smart contract
 ### ✨ Key Features
 
 - 🌐 **Multi-Chain Support**: Deploy on multiple chains using the same Redis instance
-- 🔄 **Intelligent Gap Detection**: Automatically handles missed blocks (1-5 blocks immediate fill, 6+ blocks background processing)
-- 🚀 **Race Condition Prevention**: Atomic Redis claims prevent duplicate processing
-- 📊 **Redis-Only State Management**: 100% Redis-based with graceful degradation
+- 🔄 **Dual-Track Processing**: Real-time priority with background historical processing
+- 🚀 **Optimized Batch Processing**: 100-block batches for reliable API responses
+- 📊 **Redis State Management**: Separate databases per chain with dual tracking
 - 🎯 **Configuration-Driven**: Add/remove contracts without code changes
-- ⚡ **Chain-Optimized**: Different batch sizes and delays per blockchain
-- 🛡️ **Production Resilient**: Handles Redis outages, RPC failures, and process crashes
+- ⚡ **Memory Optimized**: Chunked processing prevents memory explosions
+- 🛡️ **Production Resilient**: Automatic fallbacks and circuit breakers
 
 ### 🌐 Multi-Chain Deployment Strategy
 
 **Perfect for scaling across multiple blockchains:**
 
 ```bash
-# Ethereum Deployment (CHAIN_ID=1)
-Redis Keys: chain:1:progress, chain:1:block:*, chain:1:claim:*
+# Ethereum Deployment (CHAIN_ID=1) → Redis DB 0
+Keys: realtime_processed_block, historical_processed_block, historical_range
 
-# Base Deployment (CHAIN_ID=8453) 
-Redis Keys: chain:8453:progress, chain:8453:block:*, chain:8453:claim:*
+# Base Deployment (CHAIN_ID=8453) → Redis DB 1  
+Keys: realtime_processed_block, historical_processed_block, historical_range
 
-# Polygon Deployment (CHAIN_ID=137)
-Redis Keys: chain:137:progress, chain:137:block:*, chain:137:claim:*
+# Polygon Deployment (CHAIN_ID=137) → Redis DB 2
+Keys: realtime_processed_block, historical_processed_block, historical_range
 ```
 
-**✅ Same Redis Instance, Complete Isolation**: Each chain uses separate key namespaces, preventing any conflicts.
+**✅ Same Redis Instance, Complete Isolation**: Each chain uses separate Redis databases, preventing any conflicts.
+
+## 🛠️ Redis Management Commands
+
+### 📊 **Essential Commands**
+
+#### **1. View Current State:**
+```bash
+# Start Redis CLI and select your chain database
+redis-cli
+
+# For Base Chain (most common)
+SELECT 1
+HGETALL realtime_processed_block
+KEYS *
+
+# For Ethereum Chain  
+SELECT 0
+HGETALL realtime_processed_block
+KEYS *
+```
+
+#### **2. Test Historical Processing (Large Gap):**
+```bash
+# Start Redis CLI
+redis-cli
+
+# Set old block to create large gap for testing
+SELECT 1
+HSET realtime_processed_block block 35500000 chain 8453 updated 1758649000000 service base_mainnet type realtime
+DEL historical_processed_block historical_range
+
+# Verify setup
+HGETALL realtime_processed_block
+```
+
+#### **3. Reset System (Clean Start):**
+```bash
+# Start Redis CLI
+redis-cli
+
+# Clear all data for Base chain
+SELECT 1
+FLUSHDB
+
+# Or clear all databases
+FLUSHALL
+```
+
+### 🎯 **Database Mapping:**
+```bash
+SELECT 0  # Ethereum (Chain ID: 1)
+SELECT 1  # Base (Chain ID: 8453)  
+SELECT 2  # Polygon (Chain ID: 137)
+```
+
+### ⚡ **Performance Configuration**
+
+#### **Current Optimized Settings:**
+```bash
+Batch Size: 100 blocks (all chains)
+Chunk Size: 1000 logs per chunk
+API Response: ~10-40MB (safe for all providers)
+Performance: 100x faster than individual calls
+Memory: Optimized with chunked processing
+```
 
 ## 🔧 Smart Contract Development Guide
 
@@ -915,211 +980,3 @@ CMD ["npm", "start"]
 └─────────────────┘
 ```
 
-## 📈 Performance & Monitoring
-
-### Key Metrics
-- **Block Processing Rate**: Optimized per chain (3-25 blocks/batch)
-- **Gap Detection**: Handles 1-1M+ block gaps intelligently  
-- **Memory Usage**: <50MB per instance (Redis-only state)
-- **Race Conditions**: 0% (atomic Redis claims)
-- **Event Loss**: 0% (dual-track processing + 15min safety service)
-
-### Health Monitoring
-```bash
-# Health check endpoint
-curl http://localhost:3001/health
-
-# Response
-{
-  "status": "healthy",
-  "timestamp": "2025-09-16T12:30:10.000Z",
-  "uptime": 86400
-}
-```
-
-## 🔒 Production Security & Reliability
-
-### 🛡️ **Built-in Safeguards**
-
-| Feature | Implementation | Benefit |
-|---------|---------------|---------|
-| **WebSocket Resilience** | Auto-reconnect + exponential backoff | Zero downtime during network issues |
-| **Redis Fault Tolerance** | 3-attempt retry + graceful degradation | Continues processing during Redis outages |
-| **Race Condition Prevention** | Atomic Redis claims (`SET ... NX`) | Zero duplicate events |
-| **Memory Leak Prevention** | Redis TTL + automatic cleanup | Stable long-term operation |
-| **Process Recovery** | PM2 integration + state persistence | Automatic restart with preserved state |
-| **Error Monitoring** | Sentry integration + comprehensive logging | Real-time issue detection |
-
-### 🚨 **Disaster Recovery Scenarios**
-
-#### **Redis Outage**
-```bash
-# System Response: Graceful degradation
-✅ Continues processing events
-✅ Logs warnings about Redis unavailability  
-✅ Resumes normal operation when Redis returns
-⚠️ Temporary loss of duplicate prevention (acceptable)
-```
-
-#### **RPC Node Failure**
-```bash
-# System Response: Automatic retry with backoff
-✅ Retries failed RPC calls (3 attempts)
-✅ Exponential backoff prevents overwhelming
-✅ WebSocket auto-reconnects to healthy endpoint
-⚠️ Brief processing delay during failover
-```
-
-#### **Process Crash**
-```bash
-# System Response: PM2 restart + Redis recovery
-✅ PM2 detects crash and restarts process
-✅ Redis preserves last processed block state
-✅ Resumes from exact point of failure
-✅ No events lost during restart
-```
-
-#### **Network Partition**
-```bash
-# System Response: TTL-based auto-recovery
-✅ Redis claim locks expire automatically (5min TTL)
-✅ Prevents permanent deadlocks
-✅ System self-heals when network recovers
-✅ Duplicate prevention resumes normally
-```
-
-### 🔐 **Security Best Practices**
-
-- **Environment Isolation**: Separate configs per chain/environment
-- **Secret Management**: AWS Secrets Manager integration
-- **Access Control**: Redis AUTH + network isolation
-- **Monitoring**: Comprehensive logging + Sentry error tracking
-- **Resource Limits**: Memory/CPU limits via Docker/K8s
-
----
-
-## 🎯 **Summary: Enterprise-Grade Event Listener**
-
-### ✨ **What Makes This Special**
-
-This isn't just another blockchain event listener - it's a **production-grade, enterprise-ready system** designed for **zero event loss** and **maximum reliability**:
-
-#### **🚀 Core Innovations**
-- **Intelligent Gap Detection**: Automatically handles 1-block gaps immediately, 6+ block gaps in background
-- **Atomic Race Prevention**: Redis-based claims ensure zero duplicate processing
-- **Multi-Chain Architecture**: Deploy on multiple chains with complete isolation
-- **Configuration-Driven**: Add/remove contracts without touching core code
-
-#### **💪 Production Strengths**
-- **Zero Event Loss**: Dual-track processing + 15-minute safety service backup
-- **Redis-Only State**: 100% Redis-based with graceful degradation
-- **Chain Optimization**: Tailored batch sizes and delays per blockchain
-- **Enterprise Monitoring**: Sentry integration + comprehensive logging
-
-#### **🔧 Developer Experience**
-- **8-Step Contract Addition**: Clear process from deployment to integration
-- **Automatic Generation**: Event registry, ABI mapping, logging auto-created
-- **Advanced Patterns**: Multi-chain contracts, conditional loading, dynamic handlers
-- **Complete Documentation**: Every feature explained with examples
-
-### 📊 **Performance Metrics**
-
-| Metric | Value | Notes |
-|--------|-------|-------|
-| **Memory Usage** | <50MB per instance | Redis-only state management |
-| **Processing Speed** | 3-25 blocks/batch | Chain-optimized |
-| **Event Loss Rate** | 0% | Dual-track + atomic processing |
-| **Race Conditions** | 0% | Redis atomic claims |
-| **Uptime Target** | 99.9%+ | Auto-reconnect + PM2 restart |
-
-### 🌐 **Multi-Chain Deployment Ready**
-
-```bash
-# Ethereum Mainnet
-CHAIN_ID=1 → Redis Keys: chain:1:*
-
-# Base Mainnet  
-CHAIN_ID=8453 → Redis Keys: chain:8453:*
-
-# Polygon Mainnet
-CHAIN_ID=137 → Redis Keys: chain:137:*
-
-# Same Redis, Complete Isolation ✅
-```
-
-### 🛡️ **Battle-Tested Reliability**
-
-- **✅ Handles Redis outages** (graceful degradation)
-- **✅ Survives RPC failures** (automatic retry + backoff)
-- **✅ Recovers from crashes** (PM2 + Redis state persistence)
-- **✅ Prevents race conditions** (atomic Redis operations)
-- **✅ Manages memory leaks** (TTL cleanup + optimization)
-
----
-
-## 🚀 **Ready for Enterprise Deployment**
-
-This event listener is **production-ready** and **enterprise-grade**, suitable for:
-
-### **✅ Production Environments**
-- **High-volume DeFi protocols** processing millions of events
-- **Multi-chain NFT platforms** with complex event requirements
-- **Enterprise blockchain applications** requiring 99.9% uptime
-- **Mission-critical systems** where event loss is unacceptable
-
-### **✅ Deployment Scenarios**
-- **Single Chain**: Deploy on Ethereum mainnet with full feature set
-- **Multi-Chain**: Deploy on Ethereum + Base + Polygon with shared Redis
-- **High Availability**: Multiple instances per chain with load balancing
-- **Microservices**: Integrate with existing blockchain infrastructure
-
-### **✅ Scaling Capabilities**
-- **Horizontal Scaling**: Add more instances as transaction volume grows
-- **Chain Expansion**: Add new blockchains in minutes, not days
-- **Contract Growth**: Support hundreds of smart contracts simultaneously
-- **Event Volume**: Handle millions of events per day with consistent performance
-
----
-
-## 📞 **Support & Maintenance**
-
-### **🔧 Operational Commands**
-```bash
-# Health monitoring
-curl http://localhost:3001/health
-
-# Redis state inspection  
-redis-cli hgetall "chain:1:progress"
-
-# Performance monitoring
-pm2 monit
-
-# Log analysis
-tail -f logs/app.log | grep "ERROR\|WARN"
-```
-
-### **📈 Production Monitoring**
-- **Sentry**: Real-time error tracking and performance monitoring
-- **Redis Metrics**: Block processing rate, gap detection frequency
-- **SQS Monitoring**: Queue depth, message processing rate
-- **System Metrics**: Memory usage, CPU utilization, network I/O
-
----
-
-## 📝 License
-
-This project is licensed under the MIT License.
-
----
-
-## 🎯 **Deploy with Complete Confidence**
-
-**This event listener has been architected, tested, and optimized for enterprise production environments. Deploy knowing you have:**
-
-- 🛡️ **Zero Event Loss Guarantee**
-- ⚡ **Sub-second Processing Latency**  
-- 🔄 **Automatic Failure Recovery**
-- 📊 **Complete Operational Visibility**
-- 🚀 **Infinite Horizontal Scaling**
-
-**Ready for your most demanding blockchain applications!** 🎯
