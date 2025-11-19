@@ -531,8 +531,6 @@ WEB3_PROVIDER=wss://eth-mainnet.g.alchemy.com/v2/your-api-key
 LAST_PROCESSED_BLOCK_KEY=ethereum_mainnet
 
 # Contract addresses for Ethereum
-POD_ADDRESS=0x...
-REVENANTS_ADDRESS=0x...
 ```
 
 #### Base Mainnet:
@@ -541,9 +539,6 @@ CHAIN_ID=8453
 WEB3_PROVIDER=wss://base-mainnet.g.alchemy.com/v2/your-api-key  
 LAST_PROCESSED_BLOCK_KEY=base_mainnet
 
-# Contract addresses for Base (different from Ethereum)
-POD_ADDRESS=0x...
-REVENANTS_ADDRESS=0x...
 ```
 
 #### Polygon Mainnet:
@@ -553,8 +548,6 @@ WEB3_PROVIDER=wss://polygon-mainnet.g.alchemy.com/v2/your-api-key
 LAST_PROCESSED_BLOCK_KEY=polygon_mainnet
 
 # Contract addresses for Polygon
-POD_ADDRESS=0x...
-REVENANTS_ADDRESS=0x...
 ```
 
 ### 📁 Project Structure
@@ -602,44 +595,6 @@ base_event_listener/
 - 🔧 **Dynamic Handlers**: Handler functions selected by name
 - 📊 **Chain Optimization**: Automatic batch/delay selection
 
-## 🔍 Startup Logs
-
-When you start the application, you'll see which contracts are active:
-
-```
-✅ Critical dependencies validated
-✅ Connected to MongoDB
-Redis connected successfully
-Redis initialized and ready
-📊 Retrieved progress: Block 18500000 (Chain: 1, Updated: 2025-09-16T12:30:10.000Z)
-Resumed from Redis: last processed block 18500000
-📋 Loaded 150 token addresses from database
-
-=== ACTIVE CONTRACT CONFIGURATION ===
-✅ POD Transfers: 0x2F419B18c1ff72391A1648FAf6d6A1714AD72fd4
-✅ Revenants Transfers: 0xa6335cEcEB86EC0B041c8DCC84Ff9351dE8776aB
-✅ Token Database Filtering: Enabled (150 tokens tracked)
-======================================
-📋 Event Registry: 12 handlers registered
-
-WebSocket Connected on WEB3_PROVIDER
-🔥 New Block Mined 18500001
-✅ No gap detected, processing block 18500001
-⚡ REAL-TIME processing block: 18500001
-📝 Updated Redis: last processed block 18500001
-```
-
-## 🚀 Quick Start Guide
-
-### 📋 Prerequisites
-
-| Requirement | Version | Purpose |
-|-------------|---------|---------|
-| **Node.js** | 18+ | Runtime environment |
-| **NPM** | Latest | Package management |
-| **Redis** | 6+ | State management & race condition prevention |
-| **MongoDB** | 4.0+ | Token database for filtering (optional) |
-| **Blockchain RPC** | WebSocket | Real-time event streaming |
 
 ### ⚡ Installation & Setup
 
@@ -681,8 +636,8 @@ curl http://localhost:3001/health
 ```bash
 # Check startup logs for active contracts
 === ACTIVE CONTRACT CONFIGURATION ===
-✅ POD Transfers: 0x2F41...
-✅ Revenants Transfers: 0xa633...
+✅  Transfers: 0x2F41...
+✅  Transfers: 0xa633...
 ✅ Token Database Filtering: Enabled (150 tokens tracked)
 ======================================
 
@@ -718,9 +673,6 @@ TRANSFER_HANDLER_SQS=https://sqs.us-east-2.amazonaws.com/your-transfer-queue
 SENTRY_DSN=https://your-sentry-dsn@sentry.io/project-id
 PORT=3001
 
-# Contract Addresses (Chain-specific)
-POD_ADDRESS=0x2F419B18c1ff72391A1648FAf6d6A1714AD72fd4
-REVENANTS_ADDRESS=0xa6335cEcEB86EC0B041c8DCC84Ff9351dE8776aB
 
 # Event Topics (Same across chains)
 
