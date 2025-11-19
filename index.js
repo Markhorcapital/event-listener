@@ -5,30 +5,35 @@ const loadSecrets = require('./load_env');
 const express = require('express');
 const Sentry = require('@sentry/node');
 const { closeRedis } = require('./config/redisInstance');
+const { connectDB, mongoose } = require('./config/mongooseInstance');
 
 (async () => {
 	await loadSecrets();
+
+	// Initialize database connection (optional - will warn if not available)
+	await connectDB();
+
 	const { startProcessing } = require('./server/manager.js');
 	const app = express();
 	const { PORT, SENTRY_DSN } = Secrets;
 
 	app.use(express.json());
 
-	Sentry.init({
-		dsn: SENTRY_DSN,
-		integrations: [
-			// enable HTTP calls tracing
-			new Sentry.Integrations.Http({
-				tracing: true
-			}),
-			// enable Express.js middleware tracing
-			new Sentry.Integrations.Express({
-				app
-			})
-		],
-		// Performance Monitoring
-		tracesSampleRate: 1.0 // Capture 100% of the transactions, reduce in production!,
-	});
+	// Sentry.init({
+	// 	dsn: SENTRY_DSN,
+	// 	integrations: [
+	// 		// enable HTTP calls tracing
+	// 		new Sentry.Integrations.Http({
+	// 			tracing: true
+	// 		}),
+	// 		// enable Express.js middleware tracing
+	// 		new Sentry.Integrations.Express({
+	// 			app
+	// 		})
+	// 	],
+	// 	// Performance Monitoring
+	// 	tracesSampleRate: 1.0 // Capture 100% of the transactions, reduce in production!,
+	// });
 
 
 	// Custom middleware to log API caller data in case of errors
@@ -92,16 +97,18 @@ const { closeRedis } = require('./config/redisInstance');
 		console.log(`Express server listening on PORT ${PORT}`);
 	});
 
-	// Graceful shutdown for Redis
+	// Graceful shutdown for Redis and MongoDB
 	process.on('SIGINT', async () => {
 		console.log('Shutting down gracefully...');
 		await closeRedis();
+		await mongoose.connection.close();
 		process.exit(0);
 	});
 
 	process.on('SIGTERM', async () => {
 		console.log('Shutting down gracefully...');
 		await closeRedis();
+		await mongoose.connection.close();
 		process.exit(0);
 	});
 })();

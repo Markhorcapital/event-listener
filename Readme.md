@@ -2,7 +2,7 @@
 
 ## 📋 Project Overview
 
-This is a **multi-chain blockchain event listener** that monitors smart contracts across different blockchain networks. The system includes features for **event processing**, **gap detection**, and **race condition handling**.
+This is a **multi-chain blockchain event listener** that monitors ERC-20 token **transfer events** across different blockchain networks. The system includes features for **transfer event processing**, **gap detection**, **race condition handling**, and **token database integration**.
 
 ### ✨ Key Features
 
@@ -10,9 +10,11 @@ This is a **multi-chain blockchain event listener** that monitors smart contract
 - 🔄 **Dual-Track Processing**: Real-time priority with background historical processing
 - 🚀 **Optimized Batch Processing**: 100-block batches for reliable API responses
 - 📊 **Redis State Management**: Separate databases per chain with dual tracking
-- 🎯 **Configuration-Driven**: Add/remove contracts without code changes
+- 💰 **Token Database Integration**: Filter transfer events against stored token collections
+- 🎯 **Configuration-Driven**: Add/remove transfer contracts without code changes
 - ⚡ **Memory Optimized**: Chunked processing prevents memory explosions
 - 🛡️ **Production Resilient**: Automatic fallbacks and circuit breakers
+- 🔐 **Checksum Address Validation**: EIP-55 compliant address handling
 
 ### 🌐 Multi-Chain Deployment Strategy
 
@@ -30,6 +32,50 @@ Keys: realtime_processed_block, historical_processed_block, historical_range
 ```
 
 **✅ Same Redis Instance, Complete Isolation**: Each chain uses separate Redis databases, preventing any conflicts.
+
+## 💰 Token Database Integration
+
+### 🎯 Smart Transfer Event Filtering
+
+The event listener now includes **intelligent token filtering** that only processes transfer events for tokens stored in your database. This prevents unnecessary processing of unrelated ERC-20 transfer events while maintaining full compatibility with existing systems.
+
+#### **How It Works:**
+```javascript
+// 1. Load tracked tokens from MongoDB
+const trackedTokens = await loadTokenAddresses(); // Cached for 5 minutes
+
+// 2. Check if transfer event is for a tracked token
+const eventAddress = log.address;
+const isTracked = await isTrackedToken(eventAddress);
+
+// 3. Process only relevant transfers
+if (isTracked) {
+    await processTransferEvent(eventData); // Send to SQS
+} else {
+    console.log(`⏭️ Skipping untracked token: ${eventAddressChecksum}`);
+}
+```
+
+#### **Database Schema:**
+```javascript
+const tokenSchema = new mongoose.Schema({
+    address: {
+        type: String,
+        required: true,
+        unique: true // Checksum format (EIP-55)
+    },
+    name: { type: String, required: true },
+    symbol: { type: String, required: true, uppercase: true },
+    decimals: { type: Number, required: true, min: 0, max: 18 },
+    chainId: { type: Number, required: true }
+}, { timestamps: true });
+```
+
+#### **Benefits:**
+- 🎯 **Reduced Noise**: Only process relevant token transfers
+- 🚀 **Performance**: Skip untracked tokens automatically
+- 📊 **Analytics**: Focus on your token ecosystem
+- 🔄 **Dynamic**: Add/remove tracked tokens without restart
 
 ## 🛠️ Redis Management Commands
 
@@ -110,16 +156,13 @@ The event listener uses a **configuration-driven architecture** where adding/rem
 
 ### 🏗️ Supported Contract Types
 
-The event listener supports any smart contract with the following patterns:
+The event listener supports ERC-20 token contracts with transfer event monitoring:
 
 | Contract Type | Use Case | Handler Type | SQS Queue |
 |---------------|----------|--------------|-----------|
-| **NFT Staking** | NFT staking/unstaking events | `handleNftEvent` | `NFT_EVENT_HANDLER_SQS` |
-| **Token Staking** | ERC20 deposit/withdrawal events | `handleGenericEvent` | `HIVE_EVENT_HANDLER_SQS` |
-| **Reward System** | Reward distribution events | `handleGenericEvent` | `HIVE_EVENT_HANDLER_SQS` |
-| **NFT Linking** | NFT linking/unlinking events | `handleNftLinkedEvent` | `NFT_EVENT_HANDLER_SQS` |
-| **Transfer Monitoring** | ERC721/ERC1155 transfer events | `handleTransferEvent` | `NFT_TRANSFER_HANDLER_SQS` |
-| **Custom Events** | Any custom smart contract events | `handleGenericEvent` | `HIVE_EVENT_HANDLER_SQS` |
+
+| **ERC-20 Transfer Monitoring** | ERC-20 token transfer events | `handleTransferEvent` | `TRANSFER_HANDLER_SQS` |
+
 
 ---
 
@@ -149,40 +192,38 @@ Before starting, gather:
 - ✅ **Contract ABI** (JSON file from compilation)
 - ✅ **Event Names** (exact names from Solidity contract)
 
-**Example Contract:**
+**Example ERC-20 Contract:**
 ```solidity
-contract MyStakingContract {
-    event TokenStaked(address indexed user, uint256 amount, uint256 timestamp);
-    event TokenUnstaked(address indexed user, uint256 amount, uint256 timestamp);
+contract MyERC20Token {
+    event Transfer(address indexed from, address indexed to, uint256 value);
 }
 ```
 
-**Event Topics:**
+**Transfer Event Topic:**
 ```bash
-# Calculate using web3.utils.keccak256
-TokenStaked: 0x1234567890abcdef... 
-TokenUnstaked: 0xabcdef1234567890...
+# Standard ERC-20 Transfer event topic (same for all ERC-20 tokens)
+Transfer(address,address,uint256): 0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef
 ```
 
 #### **Step 2: Add ABI File**
 
 ```bash
 # 1. Copy your contract ABI to the abi folder
-cp MyStakingContract.json /abi/MyStakingContract.json
+cp MyTokenContract.json abi/MyTokenContract.json
 ```
 
-**ABI File Structure:**
+**ERC-20 ABI File Structure:**
 ```json
 {
   "abi": [
     {
       "anonymous": false,
       "inputs": [
-        {"indexed": true, "name": "user", "type": "address"},
-        {"indexed": false, "name": "amount", "type": "uint256"},
-        {"indexed": false, "name": "timestamp", "type": "uint256"}
+        {"indexed": true, "name": "from", "type": "address"},
+        {"indexed": true, "name": "to", "type": "address"},
+        {"indexed": false, "name": "value", "type": "uint256"}
       ],
-      "name": "TokenStaked",
+      "name": "Transfer",
       "type": "event"
     }
   ]
@@ -193,24 +234,17 @@ cp MyStakingContract.json /abi/MyStakingContract.json
 
 ```javascript
 // 1. Add ABI import at the top
-const { abi: MyStakingAbi } = require('../abi/MyStakingContract.json');
+const { abi: MyERC20Abi } = require('../abi/MyERC20Token.json');
 
 // 2. Add contract to CONTRACT_CONFIG array
 {
-    name: 'My Staking Contract',
-    address: () => Secrets.MY_STAKING_ADDRESS,
+    name: 'My ERC-20 Token',
     events: [
         {
-            topic: () => Secrets.TOKEN_STAKED_TOPIC,
-            eventName: 'TokenStaked',
-            abi: MyStakingAbi,
-            handler: 'handleGenericEvent'  // or 'handleMyStakingEvent' for custom
-        },
-        {
-            topic: () => Secrets.TOKEN_UNSTAKED_TOPIC,
-            eventName: 'TokenUnstaked', 
-            abi: MyStakingAbi,
-            handler: 'handleGenericEvent'
+            topic: () => Secrets.TRANSFER_TOPIC,
+            eventName: 'Transfer',
+            abi: MyERC20Abi,
+            handler: 'handleTransferEvent'
         }
     ]
 }
@@ -222,9 +256,7 @@ const { abi: MyStakingAbi } = require('../abi/MyStakingContract.json');
 // Add to ISecrets object (around line 68)
 const ISecrets = {
     // ... existing variables ...
-    MY_STAKING_ADDRESS: null,
-    TOKEN_STAKED_TOPIC: null,
-    TOKEN_UNSTAKED_TOPIC: null,
+    MY_ERC20_ADDRESS: null,
     // ... rest of variables ...
 };
 ```
@@ -233,29 +265,26 @@ const ISecrets = {
 
 ```bash
 # Add to your .env file or environment
-MY_STAKING_ADDRESS=0x1234567890abcdef1234567890abcdef12345678
-TOKEN_STAKED_TOPIC=0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef
-TOKEN_UNSTAKED_TOPIC=0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890
+MY_ERC20_ADDRESS=0x1234567890abcdef1234567890abcdef12345678
 ```
 
-#### **Step 6: Optional - Create Custom Handler (`server/utils/utils.js`)**
+#### **Step 6: Optional - Create Custom Transfer Handler (`server/utils/utils.js`)**
 
-**For simple events, use existing handlers:**
-- `handleGenericEvent` → Sends to `HIVE_EVENT_HANDLER_SQS`
-- `handleNftEvent` → Sends to `NFT_EVENT_HANDLER_SQS`  
-- `handleTransferEvent` → Sends to `NFT_TRANSFER_HANDLER_SQS`
+**For standard ERC-20 transfers, use the existing handler:**
 
-**For complex events, create custom handler:**
+- `handleTransferEvent` → Sends to `TRANSFER_HANDLER_SQS`
+
+**For custom transfer processing, create a specialized handler:**
 
 ```javascript
 // 1. Add to getHandlerFunction() handlers object
 const handlers = {
     // ... existing handlers ...
-    handleMyStakingEvent: (log) => handleMyStakingEvent(log),
+    handleMyERC20Transfer: (log) => handleMyERC20Transfer(log),
 };
 
-// 2. Add custom handler function
-async function handleMyStakingEvent(log) {
+// 2. Add custom transfer handler function
+async function handleMyERC20Transfer(log) {
     const decodedLog = await decodeLog(log);
     if (decodedLog && !decodedLog.error) {
         const eventData = await transformSubscriptionEvents(
@@ -263,21 +292,22 @@ async function handleMyStakingEvent(log) {
             log,
             decodedLog.eventName
         );
-        
-        // Custom processing logic
-        if (eventData.eventType === 'TokenStaked') {
-            // Add custom staking logic
-            eventData.customField = 'staking_processed';
+
+        // Custom transfer processing logic
+        if (eventData.eventType === 'Transfer') {
+            // Add custom transfer logic
+            eventData.customField = 'erc20_transfer_processed';
+            eventData.tokenAddress = log.address;
         }
-        
-        await processEvent(eventData);
+
+        await processTransferEvent(eventData);
     }
 }
 
 // 3. Export the function
 module.exports = {
     // ... existing exports ...
-    handleMyStakingEvent,
+    handleMyERC20Transfer,
 };
 ```
 
@@ -287,21 +317,16 @@ module.exports = {
 // In transformSubscriptionEvents function, add new case
 switch (eType) {
     // ... existing cases ...
-    
-    case 'TokenStaked': {
-        jsonData = await myStakingEventHandler(decodedEvent, eType, jsonData);
-        break;
-    }
-    
-    case 'TokenUnstaked': {
-        jsonData = await myStakingEventHandler(decodedEvent, eType, jsonData);
+
+    case 'Transfer': {
+        jsonData = await myTokenEventHandler(decodedEvent, eType, jsonData);
         break;
     }
 }
 
 // Add transformer function
-async function myStakingEventHandler(decodedEvent, eType, jsonData) {
-    const expectedFields = ['user', 'amount', 'timestamp'];
+async function myTokenEventHandler(decodedEvent, eType, jsonData) {
+    const expectedFields = ['from', 'to', 'value'];
     const hasAllFields = expectedFields.every(
         (field) => field in decodedEvent.decodedParameters
     );
@@ -312,11 +337,11 @@ async function myStakingEventHandler(decodedEvent, eType, jsonData) {
     }
 
     jsonData.events[eType] = {
-        user: decodedEvent.decodedParameters.user,
-        amount: decodedEvent.decodedParameters.amount.toString(),
-        timestamp: decodedEvent.decodedParameters.timestamp.toString()
+        from: decodedEvent.decodedParameters.from,
+        to: decodedEvent.decodedParameters.to,
+        value: decodedEvent.decodedParameters.value.toString()
     };
-    
+
     return jsonData;
 }
 ```
@@ -333,9 +358,6 @@ node -c server/utils/utils.js
 npm run dev
 
 # 3. Check startup logs for your contract
-=== ACTIVE CONTRACT CONFIGURATION ===
-✅ My Staking Contract: 0x1234567890abcdef1234567890abcdef12345678
-======================================
 
 # 4. Test with a transaction on your contract
 # 5. Verify event data in SQS queue
@@ -398,74 +420,6 @@ npm run dev
 
 ---
 
-## 🎯 **Contract Integration Examples**
-
-### **Example 1: Simple ERC20 Staking Contract**
-
-```javascript
-// config/config.js
-{
-    name: 'ERC20 Staking',
-    address: () => Secrets.ERC20_STAKING_ADDRESS,
-    events: [
-        {
-            topic: () => Secrets.ERC20_STAKED_TOPIC,
-            eventName: 'Staked',
-            abi: ERC20StakingAbi,
-            handler: 'handleGenericEvent'  // Uses existing handler
-        }
-    ]
-}
-```
-
-### **Example 2: Complex NFT Marketplace Contract**
-
-```javascript
-// config/config.js  
-{
-    name: 'NFT Marketplace',
-    address: () => Secrets.MARKETPLACE_ADDRESS,
-    events: [
-        {
-            topic: () => Secrets.ITEM_LISTED_TOPIC,
-            eventName: 'ItemListed',
-            abi: MarketplaceAbi,
-            handler: 'handleMarketplaceEvent'  // Custom handler
-        },
-        {
-            topic: () => Secrets.ITEM_SOLD_TOPIC,
-            eventName: 'ItemSold',
-            abi: MarketplaceAbi,
-            handler: 'handleMarketplaceEvent'
-        }
-    ]
-}
-```
-
-### **Example 3: Multi-Event Contract with Exclusions**
-
-```javascript
-// config/config.js
-{
-    name: 'POD NFT Contract',
-    address: () => Secrets.POD_ADDRESS,
-    events: [
-        {
-            topic: () => Secrets.TRANSFER_TOPIC,
-            eventName: 'Transfer',
-            abi: ERC721Abi,
-            handler: 'handleTransferEventWithExclusions',
-            excludeAddresses: () => [
-                Secrets.NFT_STAKING_ADDRESS,
-                Secrets.MARKETPLACE_ADDRESS
-            ].filter(Boolean)  // Filter out undefined addresses
-        }
-    ]
-}
-```
-
----
-
 ## 🔍 **Debugging & Troubleshooting**
 
 ### **Common Issues & Solutions**
@@ -506,78 +460,6 @@ redis-cli hgetall "chain:1:progress"
 7. **✅ Monitor SQS queues during testing**
 
 ---
-
-## 🚀 **Advanced Contract Patterns**
-
-### **Pattern 1: Multi-Chain Same Contract**
-
-```javascript
-// Same contract deployed on multiple chains
-{
-    name: 'Universal Staking',
-    address: () => {
-        const chainId = parseInt(Secrets.CHAIN_ID);
-        const addresses = {
-            1: '0x1111...', // Ethereum
-            8453: '0x2222...', // Base  
-            137: '0x3333...' // Polygon
-        };
-        return addresses[chainId];
-    },
-    events: [
-        {
-            topic: () => Secrets.UNIVERSAL_STAKED_TOPIC, // Same topic all chains
-            eventName: 'Staked',
-            abi: UniversalStakingAbi,
-            handler: 'handleGenericEvent'
-        }
-    ]
-}
-```
-
-### **Pattern 2: Conditional Contract Loading**
-
-```javascript
-// Only load contract on specific chains
-{
-    name: 'Ethereum Only Contract',
-    address: () => {
-        const chainId = parseInt(Secrets.CHAIN_ID);
-        return chainId === 1 ? Secrets.ETH_ONLY_ADDRESS : null;
-    },
-    events: [
-        {
-            topic: () => Secrets.ETH_ONLY_TOPIC,
-            eventName: 'EthereumEvent',
-            abi: EthOnlyAbi,
-            handler: 'handleGenericEvent'
-        }
-    ]
-}
-```
-
-### **Pattern 3: Dynamic Event Handler Selection**
-
-```javascript
-// Different handlers based on chain or contract version
-{
-    name: 'Versioned Contract',
-    address: () => Secrets.VERSIONED_CONTRACT_ADDRESS,
-    events: [
-        {
-            topic: () => Secrets.VERSIONED_EVENT_TOPIC,
-            eventName: 'VersionedEvent',
-            abi: VersionedAbi,
-            handler: () => {
-                const version = Secrets.CONTRACT_VERSION;
-                return version === 'v2' ? 'handleVersionedEventV2' : 'handleVersionedEventV1';
-            }
-        }
-    ]
-}
-```
-
-**🎯 With this comprehensive guide, developers can easily add support for any smart contract without touching the core event listener code!**
 
 ## 🏗️ Architecture & Performance
 
@@ -649,8 +531,8 @@ WEB3_PROVIDER=wss://eth-mainnet.g.alchemy.com/v2/your-api-key
 LAST_PROCESSED_BLOCK_KEY=ethereum_mainnet
 
 # Contract addresses for Ethereum
-NFT_STAKING_ADDRESS=0x...
-ALI_STAKING_ADDRESS=0x...
+POD_ADDRESS=0x...
+REVENANTS_ADDRESS=0x...
 ```
 
 #### Base Mainnet:
@@ -660,8 +542,8 @@ WEB3_PROVIDER=wss://base-mainnet.g.alchemy.com/v2/your-api-key
 LAST_PROCESSED_BLOCK_KEY=base_mainnet
 
 # Contract addresses for Base (different from Ethereum)
-NFT_STAKING_ADDRESS=0x...
-ALI_STAKING_ADDRESS=0x...
+POD_ADDRESS=0x...
+REVENANTS_ADDRESS=0x...
 ```
 
 #### Polygon Mainnet:
@@ -671,28 +553,32 @@ WEB3_PROVIDER=wss://polygon-mainnet.g.alchemy.com/v2/your-api-key
 LAST_PROCESSED_BLOCK_KEY=polygon_mainnet
 
 # Contract addresses for Polygon
-NFT_STAKING_ADDRESS=0x...
-ALI_STAKING_ADDRESS=0x...
+POD_ADDRESS=0x...
+REVENANTS_ADDRESS=0x...
 ```
 
 ### 📁 Project Structure
 
 ```
-HIVE_Listner/
+base_event_listener/
 ├── 📁 config/
 │   ├── 🎯 config.js              ← MAIN CONFIGURATION (add/remove contracts here)
 │   ├── 🔗 redisInstance.js       ← Redis connection & retry logic
-│   └── 🌐 web3Instance.js        ← WebSocket connection & auto-reconnect
+│   ├── 🌐 web3Instance.js        ← WebSocket connection & auto-reconnect
+│   └── 🗄️ mongooseInstance.js    ← MongoDB connection & configuration
+├── 📁 models/
+│   └── 💰 token.js               ← Token database model (checksum addresses)
 ├── 📁 server/
 │   ├── 🚀 manager.js             ← Core event processing & gap detection
 │   └── 📁 utils/
-│       ├── 🛠️ utils.js           ← Event handlers & transformers
+│       ├── 🛠️ utils.js           ← Event handlers & token filtering
 │       ├── 🔐 secrets.js         ← Environment variable definitions
 │       └── 📊 redisBlockStorage.js ← Redis state & race condition prevention
 ├── 📁 abi/                       ← Contract ABI JSON files
 ├── 📁 kubernetes/                ← K8s deployment configs
 ├── 🐳 Dockerfile                 ← Container configuration
 ├── 📋 package.json               ← Dependencies & scripts
+├── 📄 .env.example               ← Environment variables template
 └── 📖 README.md                  ← This documentation
 ```
 
@@ -706,6 +592,7 @@ HIVE_Listner/
 #### **Dynamic Generation**:
 - ✅ **Event Registry**: Auto-built from CONTRACT_CONFIG
 - ✅ **ABI Mapping**: Auto-created from contract events
+- ✅ **Token Filtering**: Auto-loaded from MongoDB with caching
 - ✅ **Logging**: Auto-generated from active contracts
 - ✅ **Chain Optimization**: Auto-selected based on CHAIN_ID
 
@@ -721,19 +608,17 @@ When you start the application, you'll see which contracts are active:
 
 ```
 ✅ Critical dependencies validated
+✅ Connected to MongoDB
 Redis connected successfully
 Redis initialized and ready
 📊 Retrieved progress: Block 18500000 (Chain: 1, Updated: 2025-09-16T12:30:10.000Z)
 Resumed from Redis: last processed block 18500000
+📋 Loaded 150 token addresses from database
 
 === ACTIVE CONTRACT CONFIGURATION ===
-✅ NFT Staking: 0xE856B97c2015293814b4bb5a970b3eE507C118cB
-✅ ALI Staking: 0x4b3717169BE7319B0B35a36905C6671262130aa9
-✅ Reward System: 0xA6EC8541979FC97aA9bEd11798fc562cCA577E87
-✅ IntelliLinker: 0x73bB799ceA2a9fFE0e2B65620d3dbeeF6D5e2313
 ✅ POD Transfers: 0x2F419B18c1ff72391A1648FAf6d6A1714AD72fd4
 ✅ Revenants Transfers: 0xa6335cEcEB86EC0B041c8DCC84Ff9351dE8776aB
-✅ Linked NFT Transfer Monitoring: Enabled
+✅ Token Database Filtering: Enabled (150 tokens tracked)
 ======================================
 📋 Event Registry: 12 handlers registered
 
@@ -753,6 +638,7 @@ WebSocket Connected on WEB3_PROVIDER
 | **Node.js** | 18+ | Runtime environment |
 | **NPM** | Latest | Package management |
 | **Redis** | 6+ | State management & race condition prevention |
+| **MongoDB** | 4.0+ | Token database for filtering (optional) |
 | **Blockchain RPC** | WebSocket | Real-time event streaming |
 
 ### ⚡ Installation & Setup
@@ -772,8 +658,11 @@ npm install
 # Copy example environment file
 cp .env.example .env
 
-# Edit with your configuration
+# Edit with your configuration (MongoDB optional for token filtering)
 nano .env
+
+# Note: If MONGODB_URI is not set, token filtering will be disabled
+# but the event listener will still work normally
 ```
 
 #### **3. Start Development**
@@ -792,8 +681,9 @@ curl http://localhost:3001/health
 ```bash
 # Check startup logs for active contracts
 === ACTIVE CONTRACT CONFIGURATION ===
-✅ NFT Staking: 0x1234...
-✅ ALI Staking: 0x5678...
+✅ POD Transfers: 0x2F41...
+✅ Revenants Transfers: 0xa633...
+✅ Token Database Filtering: Enabled (150 tokens tracked)
 ======================================
 
 # Check Redis connection
@@ -813,88 +703,56 @@ WEB3_PROVIDER=wss://eth-mainnet.g.alchemy.com/v2/your-api-key
 REDIS_URL=redis://localhost:6379
 LAST_PROCESSED_BLOCK_KEY=ethereum_mainnet
 
+# Database Configuration (for token filtering)
+MONGODB_URI=mongodb://localhost:27017/
+# MONGO_URI=mongodb://localhost:27017/  # Alternative
+
 # AWS Configuration
 AWS_SECRET_NAME=your-secret-name
 AWS_REGION=us-east-2
 
 # SQS Queues
-HIVE_EVENT_HANDLER_SQS=https://sqs.us-east-2.amazonaws.com/your-queue
-NFT_EVENT_HANDLER_SQS=https://sqs.us-east-2.amazonaws.com/your-nft-queue
-NFT_TRANSFER_HANDLER_SQS=https://sqs.us-east-2.amazonaws.com/your-transfer-queue
+TRANSFER_HANDLER_SQS=https://sqs.us-east-2.amazonaws.com/your-transfer-queue
 
 # Monitoring
 SENTRY_DSN=https://your-sentry-dsn@sentry.io/project-id
 PORT=3001
 
 # Contract Addresses (Chain-specific)
-NFT_STAKING_ADDRESS=0xE856B97c2015293814b4bb5a970b3eE507C118cB
-ALI_STAKING_ADDRESS=0x4b3717169BE7319B0B35a36905C6671262130aa9
-REWARD_SYSTEM_CONTRACT=0xA6EC8541979FC97aA9bEd11798fc562cCA577E87
-INTELLILINKER_ADDRESS=0x73bB799ceA2a9fFE0e2B65620d3dbeeF6D5e2313
-
-# Event Topics (Same across chains)
-NFT_STAKED_TOPIC=0x7a61b2f6736839b867822dec33e9b62da0725d9d071eac74323a6e04c79223e0
-NFT_UNSTAKED_TOPIC=0x36d8306a3ba641113e235e43a209806d1ed89faf26cf1a0b0406f5bef7da1f8c
-TOKEN_DEPOSITED_TOPIC=0xf223d9f62a25e1cc7de0f82802962e811a982b702699cc85222bf17c0422163b
-TOKEN_WITHDRAWN_TOPIC=0x43f48baced8c8f1d748cc1ac8ed7ed56105c833eec2b7ddef9aec537d9593d12
-ROOT_CHANGED_TOPIC=0x714dceb37ab5c7fb26ab805d3dc0423f5d90c3dac9f6702a2ea1402ea847851c
-ERC20_REWARD_CLAIMED=0x617dc33bfe6c05895429aa10442ff5716e0040e90d0c04faa92ced6a4d0ae787
-NFT_LINKED_TOPIC=0x4c5f6243e66f868e375120e87ec9c0e34ad78379d66dca7921055094b6a7eacd
-NFT_UNLINKED_TOPIC=0xdfa02adc9cf1364277c3c57daa66f9e9d90d54e6816235d64c77f3fce73f17be
-
-# Transfer Monitoring
 POD_ADDRESS=0x2F419B18c1ff72391A1648FAf6d6A1714AD72fd4
 REVENANTS_ADDRESS=0xa6335cEcEB86EC0B041c8DCC84Ff9351dE8776aB
+
+# Event Topics (Same across chains)
+
+# Transfer Monitoring
 TRANSFER_TOPIC=0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef
-INTELLIGENTNFT_V2=0x9DE5915eee5Ab749EAbC9A7C57BF7cc2ffF7B83D
 ```
 
 ## 📊 Event Structure Examples
 
-### ALI Staking Events
+### ERC20 Transfer Events
 
-#### Token Deposited Event
+#### Standard Transfer Event Structure
 ```json
 {
-	"eventType": "TokenDeposited",
-	"contractAddress": "0x4b3717169BE7319B0B35a36905C6671262130aa9",
+	"eventType": "Transfer",
+	"contractAddress": "0xA0b86a33E6441d4ea98f9Ad6241A5b6b3b4b4b4b",
 	"chainId": 1,
-	"transactionHash": "0xa51e7d9df1c4242acea423487c269e1917f004410d9e21f88a614ca89235db50",
+	"transactionHash": "0x8ba1f109551bD432803012645821dcE2f5b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b",
 	"events": {
-		"TokenDeposited": {
-			"depositToken": "0x2722727d9DeB5962f7166E03aE81b1169f784A11",
-			"depositOwner": "0x707562da7C5e689F23139f4ACc354D163a18985a",
-			"depositAmount": "1000000000000000000",
-			"depositDuration": "60",
-			"account": {
-				"amountLocked": "2000000000000000000",
-				"maturesOn": "1727106120",
-				"lastUpdatedOn": "1727106060",
-				"createdOn": "1727105820"
-			}
+		"Transfer": {
+			"from": "0x742d35Cc6634C0532925a3b8b6b0b0b0b0b0b0b0",
+			"to": "0x8ba1f109551bD432803012645821dcE2f5b7b7b7",
+			"value": "1000000000000000000"
 		}
 	}
 }
 ```
 
-### NFT Staking Events
-
-#### NFT Staked Event
-```json
-{
-	"eventType": "Staked",
-	"contractAddress": "0xE856B97c2015293814b4bb5a970b3eE507C118cB",
-	"chainId": 1,
-	"transactionHash": "0x87d8824f461e1b909d8dbd9f64f074d038c8fe921898c77105b7dafb58dd7acf",
-	"events": {
-		"Staked": {
-			"by": "0x707562da7C5e689F23139f4ACc354D163a18985a",
-			"tokenId": 11,
-			"timestamp": "1727115192"
-		}
-	}
-}
-```
+#### Transfer Event Fields
+- **from**: Address sending the tokens (checksum format)
+- **to**: Address receiving the tokens (checksum format)
+- **value**: Amount of tokens transferred (as string to handle large numbers)
 
 ## 🛠️ Redis Management
 
@@ -967,9 +825,9 @@ CMD ["npm", "start"]
 │   Blockchain    │───▶│  Event Listener  │───▶│   SQS Queues    │
 │   (Ethereum,    │    │                  │    │                 │
 │    Base, etc.)  │    │ ┌──────────────┐ │    │ ┌─────────────┐ │
-└─────────────────┘    │ │ Gap Detection│ │    │ │ HIVE Events │ │
-                       │ │ & Processing │ │    │ │ NFT Events  │ │
-┌─────────────────┐    │ └──────────────┘ │    │ │ Transfers   │ │
+└─────────────────┘    │ │ Gap Detection│ │    │ │ Transfer Events │ │
+                       │ │ & Processing │ │    │ │ ERC20 Transfers │ │
+┌─────────────────┐    │ └──────────────┘ │    │ │              │ │
 │      Redis      │◀──▶│                  │    │ └─────────────┘ │
 │                 │    │ ┌──────────────┐ │    └─────────────────┘
 │ ┌─────────────┐ │    │ │ Race Condition│ │

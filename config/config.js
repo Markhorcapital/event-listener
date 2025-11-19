@@ -9,11 +9,9 @@
 const { Secrets } = require('../server/utils/secrets');
 
 // Import ABIs
-const { abi } = require('../abi/NFTStakingV2.json');
-const { abi: IntelliLinkerAbi } = require('../abi/IntelliLinkerV3.json');
-const { abi: PersonalityPodERC721Abi } = require('../abi/PersonalityPodERC721.json');
-const { abi: stakingAbi } = require('../abi/ERC1363StakingTrackerV1.json');
-const { abi: reward_system_abi } = require('../abi/RewardSystem.json');
+
+const { abi } = require('../abi/ERC20.json');
+
 
 // ================================================================================================
 // CONTRACT CONFIGURATION
@@ -22,98 +20,12 @@ const { abi: reward_system_abi } = require('../abi/RewardSystem.json');
 
 const CONTRACT_CONFIG = [
     {
-        name: 'NFT Staking',
-        address: () => Secrets.NFT_STAKING_ADDRESS,
-        events: [
-            {
-                topic: () => Secrets.NFT_STAKED_TOPIC,
-                eventName: 'Staked',
-                abi: abi,
-                handler: 'handleNftEvent'
-            },
-            {
-                topic: () => Secrets.NFT_UNSTAKED_TOPIC,
-                eventName: 'Unstaked',
-                abi: abi,
-                handler: 'handleNftEvent'
-            }
-        ]
-    },
-    {
-        name: 'ALI Staking',
-        address: () => Secrets.ALI_STAKING_ADDRESS,
-        events: [
-            {
-                topic: () => Secrets.TOKEN_DEPOSITED_TOPIC,
-                eventName: 'TokenDeposited',
-                abi: stakingAbi,
-                handler: 'handleGenericEvent'
-            },
-            {
-                topic: () => Secrets.TOKEN_WITHDRAWN_TOPIC,
-                eventName: 'TokenWithdrawn',
-                abi: stakingAbi,
-                handler: 'handleGenericEvent'
-            }
-        ]
-    },
-    {
-        name: 'Reward System',
-        address: () => Secrets.REWARD_SYSTEM_CONTRACT,
-        events: [
-            {
-                topic: () => Secrets.ROOT_CHANGED_TOPIC,
-                eventName: 'RootChanged',
-                abi: reward_system_abi,
-                handler: 'handleRewardEvent'
-            },
-            {
-                topic: () => Secrets.ERC20_REWARD_CLAIMED,
-                eventName: 'ERC20RewardClaimed',
-                abi: reward_system_abi,
-                handler: 'handleRewardEvent'
-            }
-        ]
-    },
-    {
-        name: 'IntelliLinker',
-        address: () => Secrets.INTELLILINKER_ADDRESS,
-        events: [
-            {
-                topic: () => Secrets.NFT_LINKED_TOPIC,
-                eventName: 'Linked',
-                abi: IntelliLinkerAbi,
-                handler: 'handleNftLinkedEvent'
-            },
-            {
-                topic: () => Secrets.NFT_UNLINKED_TOPIC,
-                eventName: 'Unlinked',
-                abi: IntelliLinkerAbi,
-                handler: 'handleNftUnLinkedEvent'
-            }
-        ]
-    },
-    {
-        name: 'POD Transfers',
-        address: () => Secrets.POD_ADDRESS,
+        name: 'Transfer',
         events: [
             {
                 topic: () => Secrets.TRANSFER_TOPIC,
                 eventName: 'Transfer',
-                abi: PersonalityPodERC721Abi,
-                handler: 'handleTransferEventWithExclusions',
-                excludeAddresses: () => [Secrets.NFT_STAKING_ADDRESS, Secrets.INTELLIGENTNFT_V2].filter(Boolean)
-            }
-        ]
-    },
-    {
-        name: 'Revenants Transfers',
-        address: () => Secrets.REVENANTS_ADDRESS,
-        events: [
-            {
-                topic: () => Secrets.TRANSFER_TOPIC,
-                eventName: 'Transfer',
-                abi: PersonalityPodERC721Abi,
+                abi: abi,
                 handler: 'handleTransferEvent'
             }
         ]
@@ -160,7 +72,7 @@ const APP_CONFIG = {
     nftCollectionFile: "nftCollection.json",
     transferMonitoring: {
         enabled: () => !!Secrets.TRANSFER_TOPIC,
-        fallbackHandler: 'handleCollectionTransfer'
+        fallbackHandler: 'handleTransferEvent'
     }
 };
 

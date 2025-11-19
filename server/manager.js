@@ -10,7 +10,6 @@ const { initRedis } = require('../config/redisInstance');
 const {
 	setLastProcessedBlock,
 	getLastProcessedBlock,
-	getCurrentLastProcessedBlock,
 	setRealtimeProcessedBlock,
 	setHistoricalProcessedBlock,
 	getRealtimeProcessedBlock,
@@ -24,8 +23,9 @@ const {
 	getChainDelay,
 	getHistoricalDelay,
 	validateCriticalDependencies,
-	buildEventHandlers,
-	handleCollectionTransfer
+	handleTransferEvent,
+	isTrackedToken,
+	loadTokenAddresses
 } = require('./utils/utils');
 
 // ================================================================================================
@@ -65,7 +65,6 @@ const {
 
 			if (lastRealtimeBlock === null) {
 				// First run - process current block only
-				console.log(`🎯 First run: processing block ${newBlockNumber}`);
 				await processCurrentBlock(newBlockNumber);
 				return;
 			}
@@ -254,8 +253,22 @@ const {
 
 			// console.log(`${logPrefix} Block ${blockNumber}: Found ${logs.length} logs`);
 
-			for (const log of logs) {
-				await processLogs(log);
+			// 🚀 PRE-LOAD TOKEN ADDRESSES: Prevent hundreds of simultaneous DB queries
+			// This ensures the token cache is ready before processing logs
+			await loadTokenAddresses(); // Pre-load token cache to avoid race conditions
+
+			// 🚀 PERFORMANCE OPTIMIZATION: Process logs in parallel instead of sequentially
+			// This can provide 10-100x speedup for blocks with many events
+			if (logs.length > 0) {
+				const logPromises = logs.map(log => processLogs(log));
+				// Use Promise.allSettled to ensure all logs are processed even if some fail
+				const results = await Promise.allSettled(logPromises);
+
+				// Log any failures (but don't stop processing)
+				const failures = results.filter(result => result.status === 'rejected');
+				if (failures.length > 0) {
+					console.warn(`⚠️  ${failures.length} log processing failures in block ${blockNumber}`);
+				}
 			}
 		} catch (error) {
 			console.error(`Error processing block ${blockNumber} (historical: ${useHistorical}):`, error);
@@ -294,6 +307,9 @@ const {
 				const logCount = blockLogCounts[blockNum] || 0;
 			}
 
+			// 🚀 PRE-LOAD TOKEN ADDRESSES: Prevent hundreds of simultaneous DB queries
+			await loadTokenAddresses(); // Pre-load token cache for this batch
+
 			// 🚀 MEMORY OPTIMIZATION: Process logs in chunks to prevent memory explosion
 			const CHUNK_SIZE = 1000; // Process 1000 logs at a time
 
@@ -302,9 +318,9 @@ const {
 
 				for (let i = 0; i < logs.length; i += CHUNK_SIZE) {
 					const chunk = logs.slice(i, i + CHUNK_SIZE);
-					for (const log of chunk) {
-						await processLogs(log);
-					}
+					// Process chunk in parallel instead of sequentially
+					const logPromises = chunk.map(log => processLogs(log));
+					await Promise.allSettled(logPromises);
 
 					// Small delay between chunks to prevent memory buildup
 					if (i + CHUNK_SIZE < logs.length) {
@@ -313,9 +329,9 @@ const {
 				}
 			} else {
 				// console.log(`📦 🔄 Processing all ${logs.length} logs from ${totalBlocks} blocks`);
-				for (const log of logs) {
-					await processLogs(log);
-				}
+				// Process all logs in parallel
+				const logPromises = logs.map(log => processLogs(log));
+				await Promise.allSettled(logPromises);
 			}
 
 			return logs;
@@ -335,18 +351,16 @@ const {
 	// Process individual log entry
 	async function processLogs(log) {
 		try {
-			const eventKey = `${log.topics[0]}-${log.address.toLowerCase()}`;
+	        if (Secrets.TRANSFER_TOPIC && log.topics[0] === Secrets.TRANSFER_TOPIC) {
+				// Check if this transfer event is related to database stored tokens
+				const eventAddress = log.address;
+				const isTracked = await isTrackedToken(eventAddress);
 
-			// O(1) lookup in event handler registry
-			const handler = eventHandlers.get(eventKey);
-
-			if (handler) {
-				// Handle specific contract events (POD, Revenants, Staking, etc.)
-				await handler(log);
-			} else if (Secrets.TRANSFER_TOPIC && log.topics[0] === Secrets.TRANSFER_TOPIC) {
-				// Handle transfers from OTHER collections in nftCollection.json
-				// (POD/Revenants are already handled above)
-				await handleCollectionTransfer(log);
+				if (isTracked) {
+					const eventAddressChecksum = web3.utils.toChecksumAddress(eventAddress);
+					// Handle transfers only for tracked tokens
+					await handleTransferEvent(log);
+				} 
 			}
 
 		} catch (error) {
@@ -377,7 +391,6 @@ const {
 		}
 
 		// Build event handler registry and show configuration
-		eventHandlers = buildEventHandlers();
 
 		web3.eth
 			.subscribe(
